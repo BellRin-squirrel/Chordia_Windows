@@ -18,12 +18,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     const SVG_PAUSE = `<svg viewBox="0 0 24 24"><path d="M6.75 5.25a1.5 1.5 0 0 0-1.5 1.5v10.5a1.5 1.5 0 0 0 3 0V6.75a1.5 1.5 0 0 0-1.5-1.5Zm10.5 0a1.5 1.5 0 0 0-1.5 1.5v10.5a1.5 1.5 0 0 0 3 0V6.75a1.5 1.5 0 0 0-1.5-1.5Z" /></svg>`;
 
     let isSeeking = false;
-    let currentMode = 'medium'; // large, medium, small
+    let currentMode = 'large'; // 修正：初期起動は大規模（large）
     let lastRenderedSongFilename = null; 
+    let isSystemResizing = false; 
 
-    // ==========================================
-    // 効果音 (Web Audio API)
-    // ==========================================
+    // 手動リサイズ判定用の「直前の安定サイズ」
+    let lastWidth = window.outerWidth || 256; 
+    let lastHeight = window.outerHeight || 750; 
+
+    const escapeHtml = (str) => String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+    // 修正：シームレスな2つのテキスト並列ループに変更
+    const setTextWithMarquee = (el, text, className) => {
+        el.innerHTML = `<div class="${className}" style="display:inline-block; max-width:100%; white-space:nowrap;">${text}</div>`;
+        requestAnimationFrame(() => {
+            const inner = el.firstElementChild;
+            if (inner && inner.scrollWidth > el.clientWidth) {
+                // 親の marquee-wrapper の中で、2枚の marquee-content を並行に走らせて切れ目のないループを構築
+                el.innerHTML = `<div class="marquee-wrapper"><span class="marquee-content">${text}</span><span class="marquee-content">${text}</span></div>`;
+            }
+        });
+    };
+
     let audioCtx = null;
     const playTickSound = () => {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -41,14 +57,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         osc.stop(audioCtx.currentTime + 0.03);
     };
 
-    // 音を鳴らすボタンに登録
     document.querySelectorAll('.tick-btn').forEach(btn => {
         btn.addEventListener('mouseenter', playTickSound);
     });
 
-    // ==========================================
-    // メインウィンドウへのコマンド送信
-    // ==========================================
     const sendCommand = (action, value = null) => {
         localStorage.setItem('mini_player_command', JSON.stringify({ action, value, t: Date.now() }));
     };
@@ -63,45 +75,87 @@ document.addEventListener('DOMContentLoaded', async () => {
         sendCommand('seek', seekEl.value / 1000);
     });
 
-    // ==========================================
-    // モード切り替え・閉じる
-    // ==========================================
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            if (e.shiftKey) sendCommand('stopPlayback');
+            else sendCommand('togglePlayPause');
+        } else if (e.code === 'ArrowRight') {
+            e.preventDefault();
+            sendCommand('nextSong');
+        } else if (e.code === 'ArrowLeft') {
+            e.preventDefault();
+            sendCommand('prevSong');
+        }
+    });
+
     const switchMode = async () => {
-        if (currentMode === 'medium') currentMode = 'small';
+        // 修正：大規模 ➔ 中規模 ➔ 小規模 ➔ 大規模 のローテーション
+        if (currentMode === 'large') currentMode = 'medium';
+        else if (currentMode === 'medium') currentMode = 'small';
         else if (currentMode === 'small') currentMode = 'large';
-        else currentMode = 'medium';
 
         document.body.className = `mode-${currentMode}`;
+        isSystemResizing = true; 
+
         try {
             await invoke('set_mini_player_mode', { mode: currentMode });
             if (currentMode === 'large') loadHistory();
         } catch(e) { console.error(e); }
+        finally {
+            setTimeout(() => {
+                lastWidth = window.outerWidth || 256;
+                lastHeight = window.outerHeight || 750;
+                isSystemResizing = false;
+            }, 500);
+        }
     };
 
     const closePlayer = async () => {
         try { await invoke('close_mini_player'); } catch(e) { window.close(); }
     };
 
+    // ★ 新設: 最小化処理の呼び出し
+    const minimizePlayer = async () => {
+        try { await invoke('minimize_mini_player'); } catch(e) { console.error(e); }
+    };
+
     document.getElementById('btnSwitchMode').addEventListener('click', switchMode);
     document.getElementById('btnSwitchModeSmall').addEventListener('click', switchMode);
     document.getElementById('btnClosePlayer').addEventListener('click', closePlayer);
     document.getElementById('btnCloseSmall').addEventListener('click', closePlayer);
+    
+    // イベントリスナー登録
+    document.getElementById('btnMinimizePlayer').addEventListener('click', minimizePlayer);
+    document.getElementById('btnMinimizeSmall').addEventListener('click', minimizePlayer);
 
-    // ==========================================
-    // Smallモード時の「正方形」リサイズ強制
-    // ==========================================
     window.addEventListener('resize', () => {
-        if (currentMode === 'small') {
+        if (currentMode === 'small' && !isSystemResizing) {
             clearTimeout(window._resizeTimer);
             window._resizeTimer = setTimeout(() => {
-                invoke('make_window_square').catch(e => console.error(e));
+                const currentWidth = window.outerWidth || 256;
+                const currentHeight = window.outerHeight || 256;
+
+                const diffWidth = Math.abs(currentWidth - lastWidth);
+                const diffHeight = Math.abs(currentHeight - lastHeight);
+
+                const widthIsMaster = diffWidth >= diffHeight;
+
+                isSystemResizing = true; 
+                invoke('make_window_square', { widthIsMaster })
+                    .then(() => {
+                        lastWidth = window.outerWidth || 256;
+                        lastHeight = window.outerHeight || 256;
+                        setTimeout(() => { isSystemResizing = false; }, 200);
+                    })
+                    .catch(e => {
+                        console.error(e);
+                        isSystemResizing = false;
+                    });
             }, 100);
         }
     });
 
-    // ==========================================
-    // タブ切り替え
-    // ==========================================
     const tabs = document.querySelectorAll('.tab-btn');
     tabs.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -112,9 +166,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
 
-    // ==========================================
-    // 履歴の取得
-    // ==========================================
     const loadHistory = async () => {
         historyListEl.innerHTML = '<div class="no-data">読み込み中...</div>';
         try {
@@ -124,11 +175,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 historyData.forEach(h => {
                     const item = document.createElement('div');
                     item.className = 'queue-item';
+                    const img = h.imageData || 'icon/Chordia.png';
                     item.innerHTML = `
+                        <img src="${img}" class="queue-art">
                         <div class="queue-info">
-                            <div class="queue-title" style="font-size:0.9rem;">${h.title}</div>
+                            <div class="queue-title" style="font-size:0.9rem;">${escapeHtml(h.title)}</div>
                             <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div class="queue-artist" style="font-size:0.75rem;">${h.artist}</div>
+                                <div class="queue-artist" style="font-size:0.75rem;">${escapeHtml(h.artist)}</div>
                                 <div style="font-size:0.7rem; color:var(--text-sub); opacity:0.6;">${h.timestamp}</div>
                             </div>
                         </div>
@@ -143,18 +196,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    // ==========================================
-    // 画面の更新
-    // ==========================================
     const render = (state) => {
         if (!state) return;
         
         if (state.song) {
             artEl.src = state.song.imageData || 'icon/Chordia.png';
-            titleEl.textContent = state.song.title || 'Unknown Title';
-            artistEl.textContent = state.song.artist || 'Unknown Artist';
+            
+            setTextWithMarquee(titleEl, escapeHtml(state.song.title || 'Unknown Title'), 'info-title');
+            setTextWithMarquee(artistEl, escapeHtml(state.song.artist || 'Unknown Artist'), 'info-artist');
+            
             if (state.song.album) {
-                albumEl.textContent = state.song.album;
+                setTextWithMarquee(albumEl, escapeHtml(state.song.album), 'info-album');
                 albumEl.style.display = 'block';
             } else {
                 albumEl.style.display = 'none';
@@ -183,8 +235,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 item.innerHTML = `
                     <img src="${img}" class="queue-art">
                     <div class="queue-info">
-                        <div class="queue-title">${song.title || 'Unknown'}</div>
-                        <div class="queue-artist">${song.artist || 'Unknown'}</div>
+                        <div class="queue-title">${escapeHtml(song.title || 'Unknown')}</div>
+                        <div class="queue-artist">${escapeHtml(song.artist || 'Unknown')}</div>
                     </div>
                 `;
                 queueListEl.appendChild(item);

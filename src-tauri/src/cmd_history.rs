@@ -1,8 +1,10 @@
 use serde_json::Value;
 use std::fs;
 use chrono::Local;
+use tauri::State;
 
-use crate::utils::get_base_dir;
+use crate::AppState;
+use crate::utils::{get_base_dir, get_asset_url};
 
 #[tauri::command]
 pub fn record_playback(song: Value) {
@@ -21,8 +23,37 @@ pub fn record_playback(song: Value) {
     let _ = fs::write(&h_path, serde_json::to_string_pretty(&h).unwrap_or_default());
 }
 
+// ★ 修正: DBと突き合わせてアートワークURLを付与する
 #[tauri::command]
-pub fn get_playback_history() -> Vec<Value> {
+pub fn get_playback_history(state: State<'_, AppState>) -> Vec<Value> {
     let h_path = get_base_dir().join("userfiles/history.json");
-    fs::read_to_string(&h_path).ok().and_then(|d| serde_json::from_str::<Vec<Value>>(&d).ok()).map(|mut v| { v.reverse(); v }).unwrap_or_default()
+    if let Ok(data) = fs::read_to_string(&h_path) {
+        if let Ok(mut history) = serde_json::from_str::<Vec<Value>>(&data) {
+            history.reverse();
+            let db = state.db.lock().unwrap();
+            
+            for h in history.iter_mut() {
+                let fname = h.get("filename").and_then(|v| v.as_str()).unwrap_or("");
+                let mut found_img = "".to_string();
+                
+                for song in db.iter() {
+                    let s_fname = song.get("musicFilename").and_then(|v| v.as_str()).unwrap_or("").split(&['/', '\\'][..]).last().unwrap_or("");
+                    if s_fname == fname {
+                        found_img = get_asset_url(song.get("imageFilename").and_then(|v| v.as_str()).unwrap_or(""));
+                        break;
+                    }
+                }
+                
+                if found_img.is_empty() {
+                    found_img = get_asset_url("library/images/default.png");
+                }
+                
+                if let Some(obj) = h.as_object_mut() {
+                    obj.insert("imageData".to_string(), Value::String(found_img));
+                }
+            }
+            return history;
+        }
+    }
+    Vec::new()
 }

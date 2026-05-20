@@ -6,27 +6,26 @@
     <link rel="icon" href="icon/Chordia.ico">
     <link rel="stylesheet" href="css/style.css">
     <style>
-        /* ★ ウィンドウ全体をドラッグ可能にし、背景を少し丸める */
+        /* ★ テーマ背景色を適用 */
         body {
             margin: 0; padding: 0;
-            background-color: var(--bg-color);
+            background-color: var(--bg-color) !important;
             color: var(--text-main);
             height: 100vh; width: 100vw;
             overflow: hidden;
             display: flex; flex-direction: column;
             user-select: none;
             border-radius: 16px; 
-            -webkit-app-region: drag; /* ドラッグ移動可能 */
+            -webkit-app-region: drag; 
             border: 1px solid rgba(128, 128, 128, 0.2);
             box-sizing: border-box;
+            transition: background-color 0.2s;
         }
 
-        /* ★ ボタンやスクロール部分はドラッグを無効化（クリック可能にする） */
         button, input, .large-content {
             -webkit-app-region: no-drag;
         }
 
-        /* --- モード共通レイアウト --- */
         .mini-container {
             display: flex; flex-direction: column;
             height: 100%; width: 100%;
@@ -35,14 +34,19 @@
             position: relative;
         }
 
-        /* --- トップバー（左上・右上のボタン配置） --- */
         .top-bar {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-start; /* 修正：Mac風に左揃えに変更 */
             align-items: center;
             width: 100%;
             margin-bottom: 2vh;
             flex-shrink: 0;
+        }
+
+        /* 修正：信号機ボタン格納用のフレックスコンテナ */
+        .window-controls-mac {
+            display: flex;
+            gap: 8px;
         }
 
         .btn-circle-mac {
@@ -50,34 +54,57 @@
             border-radius: 50%;
             border: none; cursor: pointer;
             display: flex; justify-content: center; align-items: center;
-            color: transparent; /* 通常時はアイコンを隠す */
+            color: transparent; /* 通常時は中身のシンボルを透明化 */
             transition: all 0.2s;
             padding: 0;
+            position: relative;
         }
         .btn-circle-mac svg { width: 10px; height: 10px; font-weight: bold; }
-        .btn-circle-mac:hover { color: rgba(255,255,255,0.9); transform: scale(1.1); }
-        .btn-circle-mac:active { filter: brightness(0.8); }
+        
+        /* 修正：3つのいずれかにホバーした際、Mac同様に一斉にシンボルを浮かび上がらせる */
+        .window-controls-mac:hover .btn-circle-mac { color: rgba(0, 0, 0, 0.55); }
+        .window-controls-mac:hover .btn-circle-mac:hover { color: rgba(0, 0, 0, 0.85); }
 
-        .btn-green { background-color: #28c840; } /* 三本線 */
-        .btn-red { background-color: #ff5e56; }   /* 閉じる */
+        .btn-red { background-color: #ff5e56; }   
+        .btn-yellow { background-color: #f8be39; } /* 新設：最小化ボタン（黄色） */
+        .btn-green { background-color: #28c840; } 
 
-        /* --- アートワーク (正方形キープ) --- */
         .art-wrapper {
             width: 100%; display: flex; justify-content: center;
             margin-bottom: 2vh; flex-shrink: 0; position: relative;
         }
 
         #art {
-            width: 80%; /* 幅を変えると、それに合わせて高さも変わる */
-            aspect-ratio: 1 / 1; /* ★ 常に正方形 */
+            width: 80%; 
+            aspect-ratio: 1 / 1; 
             object-fit: cover; border-radius: 3vw; 
             box-shadow: 0 1vh 3vh rgba(0,0,0,0.2); display: block;
             transition: all 0.3s;
         }
 
-        /* --- 情報・コントロール --- */
-        .info-area { text-align: center; margin-bottom: 2vh; flex-shrink: 0; }
-        .info-title { font-weight: 800; font-size: clamp(1rem, 5vw, 1.3rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.5vh; }
+        /* 修正：シームレスに回転（Marquee）するためのコンテナ設定 */
+        .marquee-wrapper { 
+            display: flex; 
+            white-space: nowrap; 
+            overflow: hidden; 
+            width: 100%; 
+        }
+
+        /* 修正：切れ目のない無限流しアニメーション（2つのテキストが完全に重なる-100%まで流し戻す） */
+        .marquee-content { 
+            display: inline-block; 
+            padding-right: 50px; 
+            flex-shrink: 0; 
+            animation: scroll-left 10s linear infinite; 
+        }
+        
+        @keyframes scroll-left { 
+            0% { transform: translateX(0); } 
+            100% { transform: translateX(-100%); } 
+        }
+
+        .info-area { text-align: center; margin-bottom: 2vh; flex-shrink: 0; width: 100%; overflow: hidden; }
+        .info-title { font-weight: 800; font-size: clamp(1rem, 5vw, 1.3rem); white-space: nowrap; overflow: hidden; margin-bottom: 0.5vh; }
         .info-artist { color: var(--text-sub); font-size: clamp(0.8rem, 4vw, 1rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .info-album { color: var(--text-sub); font-size: clamp(0.75rem, 3.5vw, 0.9rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.7; margin-top: 2px;}
 
@@ -92,7 +119,6 @@
         .seek-bar { -webkit-appearance: none; width: 100%; height: 6px; border-radius: 3px; background: rgba(128,128,128,0.2); outline: none; cursor: pointer; }
         .seek-bar::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--primary-color); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 
-        /* --- Largeモード用 --- */
         .large-area {
             flex: 1; min-height: 0; display: flex; flex-direction: column;
             background: rgba(128,128,128,0.05); border-radius: 12px; overflow: hidden;
@@ -118,57 +144,66 @@
         .queue-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
         .queue-title { font-size: clamp(0.85rem, 3.5vw, 1rem); font-weight: 700; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .queue-artist { font-size: clamp(0.75rem, 3vw, 0.85rem); color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .lyric-text { white-space: pre-wrap; font-size: 0.9rem; line-height: 1.6; color: var(--text-main); text-align: center;}
+        .lyric-text { white-space: pre-wrap; font-size: 0.9rem; line-height: 1.6; color: var(--text-main); text-align: left;}
         
-        /* --- Smallモード (画像のみ) --- */
-        body.mode-small { border-radius: 12px; border: none; }
+        body.mode-small { border-radius: 12px; border: none; background-color: transparent !important; }
         body.mode-small .mini-container { padding: 0; }
-        body.mode-small .top-bar { display: none; } /* 上部バーを隠す */
+        body.mode-small .top-bar { display: none; } 
         body.mode-small .art-wrapper { margin: 0; height: 100vh; }
         body.mode-small #art { width: 100%; max-height: none; border-radius: 0; box-shadow: none; border-radius: 12px; }
         body.mode-small .info-area, body.mode-small .ctrl-area, body.mode-small .seek-area, body.mode-small .large-area { display: none; }
         
-        /* Smallモード専用のオーバーレイボタン */
         .small-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); display: flex; justify-content: space-between; align-items: flex-start;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.05) 40%, transparent 80%);
+            display: flex; justify-content: flex-start; align-items: flex-start; /* 修正：Mac風に左揃えに変更 */
             padding: 10px; box-sizing: border-box; opacity: 0; transition: opacity 0.2s;
             border-radius: 12px;
+            -webkit-app-region: drag;
         }
         body.mode-small .art-wrapper:hover .small-overlay { opacity: 1; }
 
-        /* --- 表示モード切り替え --- */
         body.mode-medium .large-area { display: none; }
         body.mode-large #album { display: none; }
 
         .no-data { text-align: center; color: var(--text-sub); font-size: 0.85rem; padding: 20px 0; }
     </style>
 </head>
-<body class="mode-medium">
+<body class="mode-large"> 
     <div class="mini-container">
         
         <!-- Large/Medium用のトップバー -->
         <div class="top-bar">
-            <!-- 左上: モード変更 (三本線) -->
-            <button id="btnSwitchMode" class="btn-circle-mac btn-green tick-btn" title="表示切り替え">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-            </button>
-            <!-- 右上: 閉じる -->
-            <button id="btnClosePlayer" class="btn-circle-mac btn-red tick-btn" title="閉じる">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
+            <!-- 修正：信号機レイアウトに変更 -->
+            <div class="window-controls-mac">
+                <button id="btnClosePlayer" class="btn-circle-mac btn-red tick-btn" title="閉じる">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+                <button id="btnMinimizePlayer" class="btn-circle-mac btn-yellow tick-btn" title="最小化">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg>
+                </button>
+                <button id="btnSwitchMode" class="btn-circle-mac btn-green tick-btn" title="表示切り替え">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                </button>
+            </div>
         </div>
 
         <div class="art-wrapper">
             <img id="art" src="icon/Chordia.png">
             <!-- Smallモード専用のオーバーレイ -->
             <div class="small-overlay">
-                <button id="btnSwitchModeSmall" class="btn-circle-mac btn-green tick-btn" title="表示切り替え">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
-                </button>
-                <button id="btnCloseSmall" class="btn-circle-mac btn-red tick-btn" title="閉じる">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
+                <!-- 修正：小規模用オーバーレイも信号機レイアウトに変更 -->
+                <div class="window-controls-mac">
+                    <button id="btnCloseSmall" class="btn-circle-mac btn-red tick-btn" title="閉じる">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    <button id="btnMinimizeSmall" class="btn-circle-mac btn-yellow tick-btn" title="最小化">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15" /></svg>
+                    </button>
+                    <button id="btnSwitchModeSmall" class="btn-circle-mac btn-green tick-btn" title="表示切り替え">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /></svg>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -214,5 +249,6 @@
     </div>
 
     <script src="js/player/mini_player.js"></script>
+    <script src="js/theme.js"></script>
 </body>
 </html>

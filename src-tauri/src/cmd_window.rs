@@ -23,10 +23,23 @@ pub async fn open_new_window(app: AppHandle, label: String, url: String, title: 
 #[tauri::command]
 pub async fn set_mini_player_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("mini_player_window") {
+        let scale_factor = window.scale_factor().unwrap_or(1.0);
+        
+        let current_width = if let Ok(size) = window.outer_size() {
+            let logical_size = size.to_logical::<f64>(scale_factor);
+            if logical_size.width > 50.0 {
+                logical_size.width
+            } else {
+                256.0
+            }
+        } else {
+            256.0
+        };
+
         match mode.as_str() {
-            "large" => { let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 450.0, height: 750.0 })); }
-            "medium" => { let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 320.0, height: 550.0 })); }
-            "small" => { let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: 250.0, height: 250.0 })); }
+            "large" => { let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: current_width, height: 750.0 })); }
+            "medium" => { let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: current_width, height: 550.0 })); }
+            "small" => { let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: current_width, height: current_width })); } 
             _ => {}
         }
     }
@@ -39,12 +52,44 @@ pub async fn close_mini_player(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// ★ 新設: ミニプレイヤーを最小化するコマンド
 #[tauri::command]
-pub async fn make_window_square(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn minimize_mini_player(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("mini_player_window") {
+        let _ = window.minimize();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn make_window_square(app: tauri::AppHandle, width_is_master: bool) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("mini_player_window") {
         if let Ok(size) = window.outer_size() {
-            let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { width: size.width, height: size.width }));
+            let diff = (size.width as i32 - size.height as i32).abs();
+            if diff > 2 {
+                let target_dimension = if width_is_master { size.width } else { size.height };
+                let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize { 
+                    width: target_dimension, 
+                    height: target_dimension 
+                }));
+            }
         }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn show_in_explorer(path: String) -> Result<(), String> {
+    let abs_path = crate::utils::get_base_dir().join(&path);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        let path_str = abs_path.to_str().unwrap_or("");
+        
+        std::process::Command::new("explorer")
+            .raw_arg(format!("/select,\"{}\"", path_str))
+            .spawn()
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }

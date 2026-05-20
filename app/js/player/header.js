@@ -49,8 +49,8 @@
                     label: "mini_player_window",
                     url: "mini_player.html",
                     title: "Mini Player",
-                    width: 320.0,
-                    height: 550.0
+                    width: 256.0, 
+                    height: 750.0 // 修正：起動時は大規模モードのため高さを750.0に変更
                 });
             } catch(e) {
                 console.error("Mini Player Launch Error:", e);
@@ -75,7 +75,6 @@
             });
         },
 
-        // ★ 修正: 表示するタブを指定できるように引数を追加
         openQueueLyricsModal: async function(targetTab = 'tab-nextup') {
             const modal = document.getElementById('queueLyricsModal');
             if (!modal) return;
@@ -102,7 +101,7 @@
 
             if (nextSongsRaw.length > 0) {
                 const displaySongs = nextSongsRaw.slice(0, 50);
-                displaySongs.forEach((song) => {
+                displaySongs.forEach((song, idx) => {
                     const item = document.createElement('div');
                     item.className = 'detail-item';
                     const artSrc = song.imageData || s.DEFAULT_ICON;
@@ -113,6 +112,12 @@
                             <small style="opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem;">${u.escapeHtml(song.artist)}</small>
                         </div>
                     `;
+                    item.onclick = () => {
+                        if (window.PlayerController) {
+                            window.PlayerController.skipToQueueIndex(s.currentIndex + 1 + idx);
+                        }
+                        modal.classList.remove('show');
+                    };
                     queueList.appendChild(item);
                 });
 
@@ -142,12 +147,14 @@
                     historyData.forEach(h => {
                         const item = document.createElement('div');
                         item.className = 'detail-item';
+                        const artSrc = h.imageData || s.DEFAULT_ICON;
                         item.innerHTML = `
-                            <div class="detail-value" style="display: flex; flex-direction: column; justify-content: center;">
-                                <strong style="font-size: 0.95rem;">${u.escapeHtml(h.title)}</strong>
+                            <img src="${artSrc}" style="width: 40px; height: 40px; border-radius: 4px; object-fit: cover; flex-shrink: 0; margin-right: 12px;">
+                            <div class="detail-value" style="display: flex; flex-direction: column; justify-content: center; overflow: hidden;">
+                                <strong style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.95rem;">${u.escapeHtml(h.title)}</strong>
                                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: 2px;">
-                                    <small style="opacity: 0.7;">${u.escapeHtml(h.artist)}</small>
-                                    <small style="opacity: 0.5; font-family: monospace;">${h.timestamp}</small>
+                                    <small style="opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${u.escapeHtml(h.artist)}</small>
+                                    <small style="opacity: 0.5; font-family: monospace; white-space: nowrap;">${h.timestamp}</small>
                                 </div>
                             </div>
                         `;
@@ -160,59 +167,58 @@
                 historyList.innerHTML = '<div class="no-lyrics">履歴の取得に失敗しました</div>';
             }
 
-            // 指定されたタブを開く
             const tabBtn = modal.querySelector(`.tab-btn[data-target="${targetTab}"]`);
             if (tabBtn) tabBtn.click();
             
-            modal.classList.add('show');
-        },
+                    modal.classList.add('show');
+                },
 
-        updateHeaderUI: function(song) {
-            this.setTextWithMarquee(this.hpTitleContainer, song.title || 'Unknown', 'hp-title');
-            
-            const album = song.album || ''; 
-            const artist = song.artist || '';
-            let subText = "";
-            if(album && artist) subText = `${album} - ${artist}`;
-            else subText = album || artist;
-            this.setTextWithMarquee(this.hpSubContainer, subText, 'hp-sub');
+                updateHeaderUI: function(song) {
+                    this.setTextWithMarquee(this.hpTitleContainer, song.title || 'Unknown', 'hp-title');
+                    
+                    const album = song.album || ''; 
+                    const artist = song.artist || '';
+                    let subText = "";
+                    if(album && artist) subText = `${album} - ${artist}`;
+                    else subText = album || artist;
+                    this.setTextWithMarquee(this.hpSubContainer, subText, 'hp-sub');
 
-            const artSrc = song.imageData || s.DEFAULT_ICON;
-            this.hpArtImg.src = artSrc;
-        },
+                    const artSrc = song.imageData || s.DEFAULT_ICON;
+                    this.hpArtImg.src = artSrc;
+                },
 
-        setTextWithMarquee: function(container, text, className) {
-            container.innerHTML = `<div class="${className}">${u.escapeHtml(text)}</div>`;
-            const element = container.firstElementChild;
-            if (element && element.scrollWidth > container.clientWidth) {
-                const escaped = u.escapeHtml(text);
-                container.innerHTML = `<div class="marquee-wrapper"><span class="marquee-content">${escaped}</span><span class="marquee-content">${escaped}</span></div>`;
-            }
-        },
+                setTextWithMarquee: function(container, text, className) {
+                    container.innerHTML = `<div class="${className}">${u.escapeHtml(text)}</div>`;
+                    const element = container.firstElementChild;
+                    if (element && element.scrollWidth > container.clientWidth) {
+                        const escaped = u.escapeHtml(text);
+                        container.innerHTML = `<div class="marquee-wrapper"><span class="marquee-content">${escaped}</span><span class="marquee-content">${escaped}</span></div>`;
+                    }
+                },
 
-        updatePlayIcons: function(isPlaying) {
-            if (this.hdrBtnPlayPause) {
-                if (isPlaying) {
-                    this.hdrBtnPlayPause.innerHTML = s.SVG_PAUSE;
-                    this.hdrBtnPlayPause.title = "一時停止 (Space)";
-                } else {
-                    this.hdrBtnPlayPause.innerHTML = s.SVG_PLAY;
-                    this.hdrBtnPlayPause.title = "再生 (Space)";
+                updatePlayIcons: function(isPlaying) {
+                    if (this.hdrBtnPlayPause) {
+                        if (isPlaying) {
+                            this.hdrBtnPlayPause.innerHTML = s.SVG_PAUSE;
+                            this.hdrBtnPlayPause.title = "一時停止 (Space)";
+                        } else {
+                            this.hdrBtnPlayPause.innerHTML = s.SVG_PLAY;
+                            this.hdrBtnPlayPause.title = "再生 (Space)";
+                        }
+                    }
+                },
+
+                updateToggleButtons: function() {
+                    if (this.btnShuffleToggle) {
+                        if (s.isShuffle) this.btnShuffleToggle.classList.add('active');
+                        else this.btnShuffleToggle.classList.remove('active');
+                    }
+
+                    if (this.btnLoopToggle) {
+                        this.btnLoopToggle.className = 'btn-icon-toggle';
+                        if (s.loopMode === 'all') this.btnLoopToggle.classList.add('active');
+                        else if (s.loopMode === 'one') this.btnLoopToggle.classList.add('active-one');
+                    }
                 }
-            }
-        },
-
-        updateToggleButtons: function() {
-            if (this.btnShuffleToggle) {
-                if (s.isShuffle) this.btnShuffleToggle.classList.add('active');
-                else this.btnShuffleToggle.classList.remove('active');
-            }
-
-            if (this.btnLoopToggle) {
-                this.btnLoopToggle.className = 'btn-icon-toggle';
-                if (s.loopMode === 'all') this.btnLoopToggle.classList.add('active');
-                else if (s.loopMode === 'one') this.btnLoopToggle.classList.add('active-one');
-            }
-        }
-    };
-})();
+            };
+        })();

@@ -92,10 +92,9 @@
             this.updateHeaderCheckboxState();
         },
 
-        sortData: function(field) {
-            // 軽量化のため、現在はDOMの再構築を伴うソートは無効化しています。
-        },
+        sortData: function(field) {},
 
+        // ★ 修正: 保存後に確実に再描画する
         save: async function() {
             const btn = document.getElementById('btnSaveSelect');
             const originalText = btn.textContent;
@@ -104,13 +103,15 @@
             try {
                 const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
                 const newSongs = Array.from(this.selectedFilenames);
-                // ★ 修正: plId
                 const updatedPl = await invoke("update_playlist_by_id", { plId: this.currentPlaylistId, field: 'music', value: newSongs });
                 if (updatedPl) {
-                    const idx = s.playlists.findIndex(p => p.id === this.currentPlaylistId);
-                    if (idx !== -1) s.playlists[idx] = updatedPl;
                     if (s.currentPlaylistIndex !== -1 && s.playlists[s.currentPlaylistIndex].id === this.currentPlaylistId) {
-                        window.MainViewController.renderMainView();
+                        await window.MainViewController.selectPlaylist(s.currentPlaylistIndex);
+                    } else {
+                        const idx = s.playlists.findIndex(p => p.id === this.currentPlaylistId);
+                        if (idx !== -1) {
+                            s.playlists[idx] = await invoke("get_playlist_details", { plId: this.currentPlaylistId });
+                        }
                     }
                     window.PlayerUtils.showToast("プレイリストを更新しました", false);
                     this.close();

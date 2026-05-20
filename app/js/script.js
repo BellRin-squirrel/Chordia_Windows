@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const btnMobileSync = document.getElementById('btnMobileSync');
     const btnSettings = document.getElementById('btnSettings');
     const btnInfo = document.getElementById('btnInfo');
-    const btnExtensions = document.getElementById('btnExtensions'); // 追加
+    const btnExtensions = document.getElementById('btnExtensions'); 
 
     if (btnAddMusic) btnAddMusic.addEventListener('click', () => window.location.href = 'add_music.html');
 
@@ -51,14 +51,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (btnMobileSync) {
+        let isSyncOpening = false; // 二重起動・競合ガードフラグ
         btnMobileSync.addEventListener('click', async () => {
-            await invoke("open_new_window", {
-                label: "sync_window",
-                url: "api.html",
-                title: "モバイル同期 - Chordia",
-                width: 500.0,
-                height: 650.0
-            });
+            if (isSyncOpening) return;
+            isSyncOpening = true;
+            btnMobileSync.disabled = true; // ボタンを一時無効化
+            
+            try {
+                await invoke("open_new_window", {
+                    label: "sync_window", 
+                    url: "api.html",
+                    title: "モバイル同期 - Chordia",
+                    width: 1000.0,
+                    height: 650.0
+                });
+            } catch(e) {
+                console.error(e);
+            } finally {
+                // ウィンドウが立ち上がり落ち着くまでの時間（1秒）経過後にガードを解放
+                setTimeout(() => {
+                    isSyncOpening = false;
+                    btnMobileSync.disabled = false;
+                }, 1000);
+            }
         });
     }
 
@@ -86,9 +101,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         if (targetBtn) {
-            e.preventDefault();       // ブラウザのネイティブ機能をブロック
-            e.stopPropagation();      // イベントの伝播をブロック
-            if (document.activeElement) document.activeElement.blur(); // アクティブ状態を解除
+            e.preventDefault();       
+            e.stopPropagation();      
+            if (document.activeElement) document.activeElement.blur(); 
             targetBtn.click();
         }
     });

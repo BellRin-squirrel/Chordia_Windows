@@ -75,11 +75,7 @@
                 this.updateSeekColor(0);
             }
 
-            // ==========================================
-            // ★ プレイヤー画面用 キーボードショートカット
-            // ==========================================
             document.addEventListener('keydown', (e) => {
-                // Ctrl + F: 検索ボックスへフォーカス
                 if ((e.ctrlKey || e.metaKey) && e.code === 'KeyF') {
                     e.preventDefault(); e.stopPropagation();
                     const searchBox = document.getElementById('playlistLocalSearch');
@@ -87,7 +83,6 @@
                     return;
                 }
 
-                // 入力中は他のショートカットを無視
                 if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
                 
                 let handled = true;
@@ -278,6 +273,14 @@
                     if (window.HeaderController) window.HeaderController.updatePlayIcons(false);
                     u.showToast("再生に失敗しました", true);
                 });
+            }
+        },
+
+        // ★ 修正: キューから直接飛ぶ関数
+        skipToQueueIndex: function(index) {
+            if (index >= 0 && index < s.queue.length) {
+                s.currentIndex = index;
+                this.playCurrentIndex();
             }
         },
 

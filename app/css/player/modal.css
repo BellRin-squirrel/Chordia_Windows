@@ -1,12 +1,8 @@
 @charset "UTF-8";
 
-/* --- モーダルオーバーレイ --- */
 .modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.6); 
     display: none;
     justify-content: center;
@@ -24,7 +20,6 @@
     visibility: visible;
 }
 
-/* --- モーダルコンテンツ共通設定 --- */
 .modal-content {
     background: var(--card-bg); 
     padding: 24px;
@@ -42,7 +37,6 @@
 .modal-content h3 { color: var(--text-main); margin-top: 0; margin-bottom: 12px;} 
 .modal-content p { color: var(--text-sub); } 
 
-/* 閉じるボタン (右上の丸ボタン) */
 .btn-close-circle {
     position: absolute; 
     top: 20px; 
@@ -66,7 +60,6 @@
 }
 .btn-close-circle:active { opacity: 0; }
 
-/* 汎用ボタン (キャンセル / 適用など) */
 .btn-cancel {
     background: rgba(128, 128, 128, 0.1);
     color: var(--text-main);
@@ -92,7 +85,6 @@
 .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
 .btn-primary:active { transform: translateY(0); }
 
-/* --- 枠線付きのサブボタン (高度な検索などに使用) --- */
 .btn-secondary {
     background: var(--bg-color);
     color: var(--text-main);
@@ -112,7 +104,6 @@
     border-color: var(--primary-color) !important;
 }
 
-/* --- 矩形選択用のマーキー --- */
 .selection-marquee {
     position: absolute;
     border: 1px solid var(--primary-color);
@@ -122,7 +113,6 @@
     display: none;
 }
 
-/* --- トースト通知 --- */
 .toast {
     visibility: hidden;
     min-width: 300px;
@@ -145,7 +135,6 @@
 .toast.success { background-color: #059669; }
 .toast.error { background-color: #ef4444; }
 
-/* --- コンテキストメニュー (右クリックメニュー全体) --- */
 .context-menu {
     position: fixed;
     background-color: color-mix(in srgb, var(--card-bg) 85%, transparent);
@@ -184,7 +173,6 @@
 } 
 .menu-divider:hover { background-color: transparent !important; }
 
-/* --- サブメニュー --- */
 .submenu {
     display: none;
     position: absolute;
@@ -213,7 +201,6 @@
 
 .submenu.left-side { left: auto; right: 100%; }
 
-/* --- 曲選択モーダル (可変幅対応) --- */
 .song-select-modal {
     width: fit-content;    
     min-width: 600px;      
@@ -286,7 +273,6 @@
     background: var(--card-bg); 
 }
 
-/* --- 楽曲情報モーダル --- */
 .info-modal {
     width: 800px;
     height: calc(100vh - 64px); 
@@ -335,7 +321,8 @@
 .tab-pane.active { display: block; flex: 1; overflow-y: auto; min-height: 0; }
 
 .details-grid { display: flex; flex-direction: column; gap: 10px; padding-right: 8px; padding-bottom: 10px; }
-.detail-item { display: flex; padding: 10px 14px; background: rgba(128, 128, 128, 0.05); border-radius: 8px; align-items: center; }
+.detail-item { display: flex; padding: 10px 14px; background: rgba(128, 128, 128, 0.05); border-radius: 8px; align-items: center; cursor: pointer; transition: background 0.1s;}
+.detail-item:hover { background: rgba(128, 128, 128, 0.1); }
 .detail-label { width: 160px; font-weight: 700; color: var(--text-sub); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.02em; flex-shrink: 0;}
 .detail-value { flex: 1; color: var(--text-main); font-size: 0.95rem; word-break: break-all; font-weight: 500; }
 
@@ -365,7 +352,7 @@
 .smart-input {
     flex: 1; padding: 8px 12px; border: 1px solid rgba(128, 128, 128, 0.3);
     border-radius: 8px; background-color: var(--bg-color); color: var(--text-main);
-    outline: none; font-size: 0.9rem; width: 100%;
+    outline: none; font-size: 0.9rem; width: 100%; height: 36px; box-sizing: border-box;
 }
 .smart-input:focus { border-color: var(--primary-color); }
 .smart-input.input-error {
@@ -390,3 +377,64 @@
 .smart-row-btn svg { width: 16px; height: 16px; }
 .smart-row-btn:hover:not(.disabled) { background: rgba(128, 128, 128, 0.1); color: var(--text-main); }
 .smart-row-btn.disabled, .smart-row-btn:disabled { opacity: 0.15; cursor: not-allowed; background: transparent; }
+
+/* ★ 追加: カスタムセレクターのスタイル */
+.custom-select-wrapper { position: relative; }
+
+.custom-select-trigger {
+    background-color: var(--bg-color);
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    border-radius: 8px;
+    color: var(--text-main);
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    outline: none;
+    min-height: 36px;
+    height: 36px;
+    gap: 8px;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+}
+
+.custom-select-trigger span { font-weight: 700; white-space: nowrap; }
+
+.custom-chevron { width: 12px; height: 12px; color: var(--text-sub); }
+
+.custom-select-dropdown {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    min-width: 100%;
+    width: max-content;
+    background-color: color-mix(in srgb, var(--card-bg) 85%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 0.5px solid rgba(128, 128, 128, 0.3);
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    padding: 4px;
+    z-index: 9999; 
+}
+
+.custom-select-dropdown.show { display: block; animation: customPop 0.1s ease-out; }
+
+@keyframes customPop {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.custom-option {
+    display: flex; align-items: center; padding: 8px 10px;
+    border-radius: 6px; font-size: 0.85rem; color: var(--text-main); cursor: pointer; gap: 8px;
+}
+
+.custom-option:hover { background-color: var(--primary-color); color: #ffffff !important; }
+.custom-option:hover .custom-check, .custom-option:hover span { color: #ffffff !important; }
+
+.custom-check { width: 12px; height: 12px; visibility: hidden; color: var(--primary-color); }
+.custom-option.active .custom-check { visibility: visible; }

@@ -54,7 +54,6 @@
             setClick('menuDuplicatePlaylist', async () => {
                 const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
                 const plId = s.playlists[s.contextTargetIndex].id;
-                // ★ 修正: plId
                 const newPl = await invoke("duplicate_playlist_by_id", { plId: plId });
                 if (newPl) {
                     s.playlists.push(newPl);
@@ -155,6 +154,11 @@
         loadPlaylists: async function() {
             const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
             try {
+                // ★ 修正: 楽曲選択モーダル等で使うための全楽曲リストを最初に取得しておく
+                s.fullLibrary = await invoke("get_library_chunk", {
+                    page: 1, limit: 0, sortField: null, sortDesc: false, searchQuery: "", advancedConditions: null
+                });
+
                 const summaries = await invoke("get_playlist_summaries");
                 summaries.sort((a, b) => (a.playlistName||"").toLowerCase().localeCompare((b.playlistName||"").toLowerCase(), 'ja'));
                 
@@ -166,7 +170,7 @@
                 }
             } catch (e) { 
                 console.error("Load Error:", e); 
-                u.showToast("プレイリストの読み込みに失敗しました", true);
+                u.showToast("データの読み込みに失敗しました", true);
             }
         },
 
@@ -284,7 +288,6 @@
         finishCreate: async function(name, type) {
             s.editingPlaylistIndex = -1;
             const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
-            // ★ 修正: plType
             const newPl = await invoke("create_playlist", { name: name, plType: type }); 
             if (newPl) {
                 s.playlists.push(newPl);
@@ -300,7 +303,6 @@
             if(!newName.trim()) { this.renderSidebar(); return; }
             const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
             const plId = s.playlists[index].id;
-            // ★ 修正: plId
             const updatedPl = await invoke("update_playlist_by_id", { plId: plId, field: 'playlistName', value: newName }); 
             if (updatedPl) {
                 s.playlists[index].playlistName = updatedPl.playlistName; 
@@ -340,7 +342,6 @@
             if(modal) modal.classList.remove('show');
             const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
             const plId = s.playlists[this.deleteTargetIndex].id;
-            // ★ 修正: plId
             await invoke("delete_playlist_by_id", { plId: plId });
             if (this.deleteTargetIndex === s.currentPlaylistIndex) s.currentPlaylistIndex = -1;
             s.playlists.splice(this.deleteTargetIndex, 1);

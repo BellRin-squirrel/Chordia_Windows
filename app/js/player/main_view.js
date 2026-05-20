@@ -29,7 +29,6 @@
                 });
             });
 
-            // ★ 検索ボックスのイベント登録
             const searchBox = document.getElementById('playlistLocalSearch');
             if (searchBox) {
                 searchBox.addEventListener('input', () => this.renderMainView());
@@ -64,7 +63,20 @@
 
             setClick('menuSongInfo', () => this.openSongInfoModal());
             setClick('menuEditSmartRules', () => window.SidebarController.openSmartPlaylistModal(s.playlists[s.currentPlaylistIndex]));
-            setClick('menuShowInExplorer', () => u.showToast("エクスプローラー表示は準備中です", true));
+            
+            setClick('menuShowInExplorer', async () => {
+                const songs = this.getSelectedSongs();
+                if (songs.length > 0) {
+                    try {
+                        let path = songs[0].musicFilename;
+                        // すべてのスラッシュをバックスラッシュに変換する
+                        path = path.replace(/\//g, "\\");
+                        await invoke("show_in_explorer", { path: path });
+                    } catch(e) {
+                        u.showToast("エクスプローラーの起動に失敗しました", true);
+                    }
+                }
+            });
             
             setClick('menuRemoveFromPlaylist', async () => {
                 const pl = s.playlists[s.currentPlaylistIndex];
@@ -125,7 +137,6 @@
             this.clearSelection(); 
             window.SidebarController.renderSidebar(); 
 
-            // 検索ボックスをリセット
             const searchBox = document.getElementById('playlistLocalSearch');
             if (searchBox) searchBox.value = '';
 
@@ -164,6 +175,13 @@
                 const end = Math.max(this.lastTrackClickedIndex, index);
                 this.selectedTrackIndices.clear();
                 for (let i = start; i <= end; i++) this.selectedTrackIndices.add(i);
+            } else if (event.ctrlKey || event.metaKey) {
+                if (this.selectedTrackIndices.has(index)) {
+                    this.selectedTrackIndices.delete(index);
+                } else {
+                    this.selectedTrackIndices.add(index);
+                }
+                this.lastTrackClickedIndex = index;
             } else {
                 this.selectedTrackIndices.clear();
                 this.selectedTrackIndices.add(index);
@@ -371,7 +389,6 @@
             const isDesc = plData.sortDesc === true;
             const sortedSongs = u.sortSongs(plData.songs, plData.sortBy, isDesc);
             
-            // ★ ローカル検索フィルタリング
             const searchInput = document.getElementById('playlistLocalSearch');
             const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
             
@@ -398,7 +415,6 @@
             });
             document.getElementById('currentPlaylistDuration').textContent = u.formatTotalDuration(totalSec);
 
-            // カバーアート
             const cover = document.getElementById('playlistCoverArt');
             if (cover) {
                 cover.removeAttribute('src');
