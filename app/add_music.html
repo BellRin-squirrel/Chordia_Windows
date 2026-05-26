@@ -69,8 +69,8 @@
         </header>
 
         <div class="tab-menu">
-            <button class="tab-btn active" data-target="tab-single">1曲追加</button>
-            <button class="tab-btn" data-target="tab-bulk">一括追加 (YouTubeリスト)</button>
+            <button class="tab-menu-btn tab-btn active" data-target="tab-single">1曲追加</button>
+            <button class="tab-menu-btn tab-btn" data-target="tab-bulk">一括追加 (YouTubeリスト)</button>
         </div>
 
         <div id="tab-single" class="tab-content active">
@@ -318,7 +318,7 @@
     <div id="confirmDuplicateModal" class="modal-overlay">
         <div class="modal-content" style="width: 400px; text-align: center;">
             <h3 style="color: #f59e0b;">重複の確認</h3>
-            <p style="margin: 20px 0; line-height: 1.6;">同じタイトル・アーティストの楽曲が既に登録されています。<br>このまま追加を続行しますか？</p>
+            <p style="margin: 20px 0; line-height: 1.6;">同じタイトル・アーティストの楽曲が既に登録されています。<br>このまま追加を続行しますか?</p>
             <div class="modal-buttons" style="display: flex; gap: 12px;">
                 <button type="button" class="btn-secondary" id="btnCancelDupAdd" style="flex: 1;">キャンセル</button>
                 <button type="button" class="btn-primary" id="btnConfirmDupAdd" style="flex: 1;">続行する</button>
@@ -345,22 +345,55 @@
         </div>
     </div>
 
-    <!-- モーダル: 一括追加用 アートワーク編集 -->
+    <!-- 修正：モーダル: 一括追加用 アートワーク編集 (管理画面と同等機能) -->
     <div id="bulkArtModal" class="modal-overlay">
-        <div class="modal-content" style="width: 450px;">
-            <h3>アートワーク編集</h3>
-            <div style="display: flex; justify-content: center; margin: 20px 0;">
-                <img id="currentBulkArtPreview" src="icon/Chordia.png" style="width: 200px; height: 200px; object-fit: cover; border-radius: 12px; box-shadow: var(--shadow-md);">
-            </div>
-            <button class="btn-secondary" style="width: 100%; margin-bottom: 12px;" onclick="document.getElementById('newBulkArtInput').click()">PCから画像を選択</button>
-            <input type="file" id="newBulkArtInput" accept="image/*" hidden>
-            <div class="modal-buttons">
-                <button id="btnCancelBulkArt" class="btn-secondary">キャンセル</button>
-                <button id="btnSaveBulkArt" class="btn-primary">反映</button>
-            </div>
-            <button id="btnCloseBulkArtModalX" class="btn-close-circle" style="position: absolute; top: 20px; right: 20px; background: none; border: none; cursor: pointer; color: var(--text-sub);">
-                <svg style="width:24px;height:24px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <div class="modal-content art-modal" style="width: 450px;">
+            <button id="btnCloseBulkArtModalX" class="btn-close-circle">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
+            <h3>アートワーク編集</h3>
+            
+            <div class="art-tabs-mini" id="bulkArtTabsMini">
+                <button class="art-mini-tab-btn active" data-target="bulk-art-mini-local">ローカル</button>
+                <button class="art-mini-tab-btn" data-target="bulk-art-mini-video">動画URL</button>
+                <button class="art-mini-tab-btn" data-target="bulk-art-mini-image">画像URL</button>
+            </div>
+
+            <div id="bulk-art-mini-local" class="art-mini-tab-content active">
+                <button class="btn-select-art" style="width: 100%; margin-bottom: 12px; background: var(--bg-color); border: 1px solid rgba(128,128,128,0.2); padding: 12px; border-radius: 10px; font-weight: 700; cursor: pointer;" onclick="document.getElementById('newBulkArtInput').click()">PCから画像を選択</button>
+            </div>
+
+            <div id="bulk-art-mini-video" class="art-mini-tab-content">
+                <div class="form-row" style="display: flex; flex-direction: column; gap: 8px;">
+                    <input type="text" id="bulkMiniVideoUrl" class="bulk-input" placeholder="YouTubeなどの動画URLを入力..." style="width: 100%; background: var(--bg-color); color: var(--text-main); border: 1px solid rgba(128,128,128,0.2); padding: 10px; border-radius: 8px; outline: none;">
+                    <button id="btnFetchBulkVideoArt" class="btn-save" style="width: 100%;">サムネを取得</button>
+                </div>
+            </div>
+
+            <div id="bulk-art-mini-image" class="art-mini-tab-content">
+                <div class="form-row" style="display: flex; flex-direction: column; gap: 8px;">
+                    <input type="text" id="bulkMiniImageUrl" class="bulk-input" placeholder="画像の直接URLを入力..." style="width: 100%; background: var(--bg-color); color: var(--text-main); border: 1px solid rgba(128,128,128,0.2); padding: 10px; border-radius: 8px; outline: none;">
+                    <button id="btnFetchBulkDirectArt" class="btn-save" style="width: 100%;">画像を取得</button>
+                </div>
+            </div>
+
+            <!-- ★エラー表示エリア -->
+            <p id="bulkArtErrorDisplay" class="art-error-msg" style="display: none; background: rgba(239, 68, 68, 0.1); color: #ef4444; padding: 10px; border-radius: 8px; font-size: 0.85rem; margin-top: 10px; border: 1px solid rgba(239, 68, 68, 0.2);"></p>
+
+            <div class="art-preview-area" style="margin-top: 20px; background: var(--bg-color); padding: 20px; border-radius: 16px; text-align: center; border: 1px solid rgba(128,128,128,0.1);">
+                <img id="currentBulkArtPreview" src="icon/Chordia.png" alt="Preview" style="width: 200px; height: 200px; object-fit: cover; border-radius: 12px; box-shadow: var(--shadow-md); margin-bottom: 12px;">
+                <p id="bulkArtStatusText" style="font-size: 0.85rem; color: var(--text-sub); font-weight: 700;">現在の画像</p>
+            </div>
+            
+            <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+                <button class="btn-delete-art" id="btnExecBulkRemoveArt" style="flex: 1; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: #ef4444; padding: 12px; border-radius: 10px; font-weight: 700; cursor: pointer;">画像を削除</button>
+                <input type="file" id="newBulkArtInput" accept="image/*" hidden>
+            </div>
+
+            <div class="modal-buttons">
+                <button id="btnCancelBulkArt" class="btn-cancel">キャンセル</button>
+                <button id="btnSaveBulkArt" class="btn-save">変更を適用</button>
+            </div>
         </div>
     </div>
 
@@ -368,7 +401,7 @@
     <div id="bulkDeleteModal" class="modal-overlay">
         <div class="modal-content" style="width: 350px;">
             <h3 style="color: #ef4444;">削除確認</h3>
-            <p>以下の楽曲を追加リストから除外しますか？</p>
+            <p>以下の楽曲を追加リストから除外しますか?</p>
             <p id="bulkDeleteTargetName" style="font-weight: bold; margin: 16px 0; color: var(--text-main);"></p>
             <div class="modal-buttons">
                 <button id="btnCancelBulkDelete" class="btn-secondary">キャンセル</button>
@@ -407,8 +440,6 @@
     </div>
 
     <div id="toast" class="toast"></div>
-
-    <!-- ★ 分割したJSファイルの読み込み -->
     
     <script src="js/add-music/utils.js"></script>
     <script src="js/add-music/source.js"></script>

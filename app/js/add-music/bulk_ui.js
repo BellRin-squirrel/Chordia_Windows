@@ -60,10 +60,25 @@
             setTimeout(() => modal.classList.add('show'), 10);
         },
 
+        // 修正：モーダルオープン時、入力状態やエラー表示、初期タブを綺麗にリセット
         openArtModal: function(idx) {
             this.currentEditIndex = idx;
             const item = this.scannedData[idx];
-            document.getElementById('currentBulkArtPreview').src = item.artwork_base64 || item.thumbnail || 'icon/Chordia.png';
+            
+            const artPreview = document.getElementById('currentBulkArtPreview');
+            artPreview.src = item.artwork_base64 || item.thumbnail || 'icon/Chordia.png';
+            
+            document.getElementById('bulkMiniVideoUrl').value = '';
+            document.getElementById('bulkMiniImageUrl').value = '';
+            document.getElementById('bulkArtStatusText').textContent = "現在の画像";
+            
+            const errEl = document.getElementById('bulkArtErrorDisplay');
+            if (errEl) errEl.style.display = 'none';
+
+            // 初期タブとして「ローカル」をアクティブ化
+            const defaultTab = document.querySelector('#bulkArtTabsMini .art-mini-tab-btn[data-target="bulk-art-mini-local"]');
+            if (defaultTab) defaultTab.click();
+
             const modal = document.getElementById('bulkArtModal');
             modal.style.display = 'flex';
             setTimeout(() => modal.classList.add('show'), 10);

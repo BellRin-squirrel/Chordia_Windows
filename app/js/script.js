@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (settings.open_manage_new_window) {
                 await invoke("open_new_window", {
                     label: "manage_window", 
-                    url: "manage.html?mode=window",
+                    url: "manage.html", // ★修正：クエリパラメータを削除し、純粋なファイルパスにする
                     title: "データベース管理 - Chordia",
                     width: 1200.0,
                     height: 900.0
@@ -51,11 +51,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (btnMobileSync) {
-        let isSyncOpening = false; // 二重起動・競合ガードフラグ
+        let isSyncOpening = false; 
         btnMobileSync.addEventListener('click', async () => {
             if (isSyncOpening) return;
             isSyncOpening = true;
-            btnMobileSync.disabled = true; // ボタンを一時無効化
+            btnMobileSync.disabled = true; 
             
             try {
                 await invoke("open_new_window", {
@@ -68,7 +68,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             } catch(e) {
                 console.error(e);
             } finally {
-                // ウィンドウが立ち上がり落ち着くまでの時間（1秒）経過後にガードを解放
                 setTimeout(() => {
                     isSyncOpening = false;
                     btnMobileSync.disabled = false;
@@ -80,11 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btnSettings) btnSettings.addEventListener('click', () => window.location.href = 'settings.html');
     if (btnInfo) btnInfo.addEventListener('click', () => window.location.href = 'info.html');
 
-    // ==========================================
-    // トップ画面のショートカットキー
-    // ==========================================
     document.addEventListener('keydown', (e) => {
-        // 入力フォーム使用時は無視
         if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
 
         let targetBtn = null;
