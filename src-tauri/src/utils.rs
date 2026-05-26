@@ -6,7 +6,17 @@ use image::load_from_memory;
 pub fn get_base_dir() -> PathBuf {
     let mut path = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     if cfg!(debug_assertions) {
-        if path.ends_with("src-tauri") { path.pop(); }
+        // ★ 修正：開発時はカレントディレクトリから上に遡り、"app" フォルダが存在するプロジェクトルートを全自動で探索する
+        let mut temp = path.clone();
+        loop {
+            if temp.join("app").exists() {
+                path = temp;
+                break;
+            }
+            if !temp.pop() {
+                break;
+            }
+        }
     } else if let Ok(exe_path) = std::env::current_exe() {
         if let Some(parent) = exe_path.parent() { return parent.to_path_buf(); }
     }

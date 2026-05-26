@@ -121,3 +121,67 @@ pub fn delete_multiple_songs(filenames: Vec<String>, state: State<'_, AppState>)
     if count > 0 { let _ = save_db(&db); }
     serde_json::json!({"success": true, "count": count})
 }
+
+// ★ 追加：リストインポートの解析
+#[tauri::command]
+pub fn parse_list_import(content: String, file_type: String) -> Result<serde_json::Value, String> {
+    if file_type == "json" {
+        let parsed: Vec<serde_json::Map<String, Value>> = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        let data: Vec<Value> = parsed.into_iter().map(|mut item| {
+            item.insert("status".to_string(), Value::String("スキャン完了".to_string()));
+            Value::Object(item)
+        }).collect();
+        Ok(serde_json::json!({"status": "success", "data": data}))
+    } else {
+        let lines: Vec<&str> = content.lines().collect();
+        if lines.is_empty() {
+            return Ok(serde_json::json!({"status": "success", "data": []}));
+        }
+        let headers: Vec<&str> = lines[0].split(',').map(|s| s.trim()).collect();
+        let mut data = Vec::new();
+        for line in lines.iter().skip(1) {
+            if line.trim().is_empty() { continue; }
+            let values: Vec<&str> = line.split(',').map(|s| s.trim()).collect();
+            let mut item = serde_json::Map::new();
+            for (i, &header) in headers.iter().enumerate() {
+                if i < values.len() {
+                    item.insert(header.to_string(), Value::String(values[i].to_string()));
+                }
+            }
+            item.insert("status".to_string(), Value::String("スキャン完了".to_string()));
+            data.push(Value::Object(item));
+        }
+        Ok(serde_json::json!({"status": "success", "data": data}))
+    }
+}
+
+// ★ 追加：解析したインポートデータのDB格納＆時間（duration）自動算出
+#[tauri::command]
+pub fn execute_final_list_import(import_data_list: Vec<serde_json::Map<String, Value>>, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let mut db = state.db.lock().unwrap();
+    let mut count = 0;
+    
+    for mut item in import_data_list {
+        item.remove("status"); 
+        
+        let rel_music_path = item.get("musicFilename").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if !rel_music_path.is_empty() {
+            // ★修正：インポート処理時にも、その場で時間（duration）を計算して挿入する
+            let duration_str = get_duration_str(Some(&Value::String(rel_music_path.clone())));
+            item.insert("duration".to_string(), Value::String(duration_str));
+            item.insert("streamUrl".to_string(), Value::String(get_asset_url(&rel_music_path)));
+        }
+        
+        let rel_img_path = item.get("imageFilename").and_then(|v| v.as_str()).unwrap_or("library/images/default.png").to_string();
+        item.insert("imageData".to_string(), Value::String(get_asset_url(&rel_img_path)));
+        
+        db.push(item);
+        count += 1;
+    }
+    
+    if count > 0 {
+        let _ = save_db(&db);
+    }
+    
+    Ok(serde_json::json!({"status": "success", "count": count}))
+}

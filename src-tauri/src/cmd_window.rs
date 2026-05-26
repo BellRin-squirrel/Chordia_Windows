@@ -7,7 +7,15 @@ pub async fn open_new_window(app: AppHandle, label: String, url: String, title: 
         return Ok(()); 
     }
     
-    let mut builder = WebviewWindowBuilder::new(&app, label.clone(), WebviewUrl::App(url.into()))
+    // WindowsとMacでカスタムプロトコルを解決できるベースURLを分岐
+    #[cfg(target_os = "windows")]
+    let base_url = "http://chordia.localhost/";
+    #[cfg(not(target_os = "windows"))]
+    let base_url = "chordia://localhost/";
+    
+    let target_url = tauri::Url::parse(&format!("{}{}", base_url, url)).map_err(|e| e.to_string())?;
+    
+    let mut builder = WebviewWindowBuilder::new(&app, label.clone(), WebviewUrl::External(target_url))
         .title(title)
         .inner_size(width, height)
         .resizable(true);
@@ -25,6 +33,7 @@ pub async fn set_mini_player_mode(app: tauri::AppHandle, mode: String) -> Result
     if let Some(window) = app.get_webview_window("mini_player_window") {
         let scale_factor = window.scale_factor().unwrap_or(1.0);
         
+        // 規模切替時、現在の論理的な「横幅（Width）」を取得し、すべてのモードで引き継ぐ
         let current_width = if let Ok(size) = window.outer_size() {
             let logical_size = size.to_logical::<f64>(scale_factor);
             if logical_size.width > 50.0 {
@@ -52,7 +61,7 @@ pub async fn close_mini_player(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-// ★ 新設: ミニプレイヤーを最小化するコマンド
+// ★ 復活: ミニプレイヤーを最小化するコマンド
 #[tauri::command]
 pub async fn minimize_mini_player(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("mini_player_window") {

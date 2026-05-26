@@ -98,10 +98,19 @@ pub fn fetch_youtube_playlist(url: String) -> Value {
         Ok(o) if o.status.success() => {
             let v: Vec<_> = String::from_utf8_lossy(&o.stdout).lines().filter_map(|l| serde_json::from_str::<Value>(l).ok())
                 .filter(|i| i["title"] != "[Private video]" && i["title"] != "[Deleted video]")
-                .map(|i| serde_json::json!({
-                    "title": i["title"], "uploader": i["uploader"], "duration": i["duration"], "thumbnail": i["thumbnail"],
-                    "url": i["url"].as_str().map(|s| s.into()).unwrap_or(format!("https://www.youtube.com/watch?v={}", i["id"].as_str().unwrap_or("")))
-                })).collect();
+                .map(|i| {
+                    let id = i["id"].as_str().unwrap_or("");
+                    // 修正：--flat-playlist で抜け落ちやすいサムネイルを動画IDから高解像度版（hqdefault）のURLとして確実かつスムーズに補完構築する
+                    let thumb_url = if !id.is_empty() {
+                        format!("https://img.youtube.com/vi/{}/hqdefault.jpg", id)
+                    } else {
+                        i["thumbnail"].as_str().unwrap_or("").to_string()
+                    };
+                    serde_json::json!({
+                        "title": i["title"], "uploader": i["uploader"], "duration": i["duration"], "thumbnail": thumb_url,
+                        "url": i["url"].as_str().map(|s| s.into()).unwrap_or(format!("https://www.youtube.com/watch?v={}", id))
+                    })
+                }).collect();
             serde_json::json!({"status": "success", "videos": v})
         },
         Ok(o) => serde_json::json!({"status": "error", "message": String::from_utf8_lossy(&o.stderr).trim()}),
@@ -198,6 +207,10 @@ pub fn download_and_save_music(mut data: serde_json::Map<String, Value>, state: 
     
     data.insert("imageFilename".into(), i_rel.clone().into());
     data.insert("imageData".into(), get_asset_url(&i_rel).into());
+
+    // ★修正：新曲一括追加時、その場で曲の長さ（duration）を測定して挿入する
+    let duration_str = get_duration_str(Some(&Value::String(m_rel)));
+    data.insert("duration".to_string(), Value::String(duration_str));
     
     db.push(data.clone()); 
     let _ = save_db(&db); 
@@ -224,6 +237,10 @@ pub fn save_music_data(mut data: serde_json::Map<String, Value>, state: State<'_
         fs::write(base.join(&rel_music_path), bytes).map_err(|e| e.to_string())?;
         data.insert("musicFilename".to_string(), Value::String(rel_music_path.clone()));
         data.insert("streamUrl".to_string(), Value::String(get_asset_url(&rel_music_path)));
+
+        // ★修正：新曲1曲追加時、その場で曲の長さ（duration）を測定して挿入する
+        let duration_str = get_duration_str(Some(&Value::String(rel_music_path)));
+        data.insert("duration".to_string(), Value::String(duration_str));
     }
 
     if let Some(artwork_data) = data.get("artwork_data").and_then(|v| v.as_str()) {
