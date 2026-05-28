@@ -19,7 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (settings.open_manage_new_window) {
                 await invoke("open_new_window", {
                     label: "manage_window", 
-                    url: "manage.html", // ★修正：クエリパラメータを削除し、純粋なファイルパスにする
+                    // ★ 修正：現在のURLをベースにした絶対URLとして組み立てる
+                    url: new URL("manage.html", window.location.href).href,
                     title: "データベース管理 - Chordia",
                     width: 1200.0,
                     height: 900.0
@@ -39,7 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (settings.open_player_new_window) {
                 await invoke("open_new_window", {
                     label: "player_window",
-                    url: "player.html",
+                    url: new URL("player.html", window.location.href).href,
                     title: "音楽を再生 - Chordia",
                     width: 1200.0,
                     height: 900.0
@@ -60,7 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 await invoke("open_new_window", {
                     label: "sync_window", 
-                    url: "api.html",
+                    url: new URL("api.html", window.location.href).href,
                     title: "モバイル同期 - Chordia",
                     width: 1000.0,
                     height: 650.0

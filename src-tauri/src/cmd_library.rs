@@ -4,6 +4,10 @@ use rand::{rng, Rng};
 use rand::distr::Alphanumeric;
 use base64::{Engine as _, engine::general_purpose};
 use tauri::State;
+use std::io::{Cursor, Read};
+
+// ★ 修正：id3 クレートから title() などを使うために必須のトレイトをインポート
+use id3::TagLike; 
 
 use crate::AppState;
 use crate::utils::*;
@@ -122,7 +126,6 @@ pub fn delete_multiple_songs(filenames: Vec<String>, state: State<'_, AppState>)
     serde_json::json!({"success": true, "count": count})
 }
 
-// ★ 追加：リストインポートの解析
 #[tauri::command]
 pub fn parse_list_import(content: String, file_type: String) -> Result<serde_json::Value, String> {
     if file_type == "json" {
@@ -155,7 +158,6 @@ pub fn parse_list_import(content: String, file_type: String) -> Result<serde_jso
     }
 }
 
-// ★ 追加：解析したインポートデータのDB格納＆時間（duration）自動算出
 #[tauri::command]
 pub fn execute_final_list_import(import_data_list: Vec<serde_json::Map<String, Value>>, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
     let mut db = state.db.lock().unwrap();
@@ -166,7 +168,6 @@ pub fn execute_final_list_import(import_data_list: Vec<serde_json::Map<String, V
         
         let rel_music_path = item.get("musicFilename").and_then(|v| v.as_str()).unwrap_or("").to_string();
         if !rel_music_path.is_empty() {
-            // ★修正：インポート処理時にも、その場で時間（duration）を計算して挿入する
             let duration_str = get_duration_str(Some(&Value::String(rel_music_path.clone())));
             item.insert("duration".to_string(), Value::String(duration_str));
             item.insert("streamUrl".to_string(), Value::String(get_asset_url(&rel_music_path)));
@@ -183,5 +184,165 @@ pub fn execute_final_list_import(import_data_list: Vec<serde_json::Map<String, V
         let _ = save_db(&db);
     }
     
+    Ok(serde_json::json!({"status": "success", "count": count}))
+}
+
+#[tauri::command]
+pub fn check_import_duplicates(import_list: Vec<serde_json::Map<String, Value>>, state: State<'_, AppState>) -> Vec<serde_json::Map<String, Value>> {
+    let db = state.db.lock().unwrap();
+    let mut duplicates = Vec::new();
+    
+    for item in import_list {
+        let t = item.get("title").and_then(|v| v.as_str()).unwrap_or("").trim().to_lowercase();
+        let ar = item.get("artist").and_then(|v| v.as_str()).unwrap_or("").trim().to_lowercase();
+        
+        if t.is_empty() || ar.is_empty() { continue; }
+        
+        let is_dup = db.iter().any(|s| {
+            let s_t = s.get("title").and_then(|v| v.as_str()).unwrap_or("").trim().to_lowercase();
+            let s_ar = s.get("artist").and_then(|v| v.as_str()).unwrap_or("").trim().to_lowercase();
+            s_t == t && s_ar == ar
+        });
+        
+        if is_dup { duplicates.push(item); }
+    }
+    duplicates
+}
+
+#[tauri::command]
+pub fn scan_zip_import(zip_data_b64: String) -> Result<serde_json::Value, String> {
+    let bytes = general_purpose::STANDARD.decode(zip_data_b64).map_err(|e| e.to_string())?;
+    let cursor = Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
+    
+    let mut data_list = Vec::new();
+    
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        if file.is_file() {
+            let name = file.name().to_string();
+            if name.to_lowercase().ends_with(".mp3") || name.to_lowercase().ends_with(".m4a") || name.to_lowercase().ends_with(".mp4") {
+                let mut buffer = Vec::new();
+                let _ = file.read_to_end(&mut buffer);
+                
+                let mut title = name.split('/').last().unwrap_or(&name).to_string();
+                let mut artist = String::new();
+                let mut album = String::new();
+                let mut artwork_base64 = String::new();
+                
+                // ★修正: ここで title(), artist(), album() などが正常に機能するようになります
+                if let Ok(tag) = id3::Tag::read_from2(&mut Cursor::new(&buffer)) {
+                    if let Some(t) = tag.title() { title = t.to_string(); }
+                    if let Some(a) = tag.artist() { artist = a.to_string(); }
+                    if let Some(al) = tag.album() { album = al.to_string(); }
+                    
+                    if let Some(pic) = tag.pictures().next() {
+                        if let Ok(img) = image::load_from_memory(&pic.data) {
+                            let s_size = std::cmp::min(img.width(), img.height());
+                            let mut ic = img.crop_imm((img.width()-s_size)/2, (img.height()-s_size)/2, s_size, s_size);
+                            if ic.color().has_alpha() {
+                                let mut bg = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(s_size, s_size, image::Rgba([255, 255, 255, 255])));
+                                image::imageops::overlay(&mut bg, &ic, 0, 0); 
+                                ic = bg;
+                            }
+                            let mut buf = std::io::Cursor::new(Vec::new()); 
+                            if ic.write_to(&mut buf, image::ImageFormat::Png).is_ok() {
+                                artwork_base64 = format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(buf.into_inner()));
+                            }
+                        }
+                    }
+                }
+                
+                data_list.push(serde_json::json!({
+                    "relPath": name,
+                    "title": title,
+                    "artist": artist,
+                    "album": album,
+                    "artworkBase64": artwork_base64,
+                    "status": "スキャン完了"
+                }));
+            }
+        }
+    }
+    
+    Ok(serde_json::json!({"status": "success", "data": data_list}))
+}
+
+#[tauri::command]
+pub fn execute_zip_import(zip_data_b64: String, import_data_list: Vec<serde_json::Map<String, Value>>, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let bytes = general_purpose::STANDARD.decode(zip_data_b64).map_err(|e| e.to_string())?;
+    let cursor = Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
+    
+    let base = get_base_dir();
+    let _ = fs::create_dir_all(base.join("library/music"));
+    let _ = fs::create_dir_all(base.join("library/images"));
+    
+    let mut db = state.db.lock().unwrap();
+    let mut count = 0;
+    
+    for mut item in import_data_list {
+        let rel_path = item.get("relPath").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if rel_path.is_empty() { continue; }
+        
+        let mut found_file = None;
+        for i in 0..archive.len() {
+            if let Ok(file) = archive.by_index(i) {
+                if file.name() == rel_path {
+                    found_file = Some(i);
+                    break;
+                }
+            }
+        }
+        
+        if let Some(idx) = found_file {
+            if let Ok(mut file) = archive.by_index(idx) {
+                let f_id: String = rng().sample_iter(&Alphanumeric).take(32).map(char::from).collect();
+                let mut ext = "mp3".to_string();
+                if let Some(e) = std::path::Path::new(&rel_path).extension().and_then(|e| e.to_str()) { ext = e.to_string(); }
+                let m_rel = format!("library/music/{}.{}", f_id, ext);
+                
+                let mut buffer = Vec::new();
+                let _ = file.read_to_end(&mut buffer);
+                
+                if fs::write(base.join(&m_rel), &buffer).is_ok() {
+                    item.insert("musicFilename".to_string(), Value::String(m_rel.clone()));
+                    item.insert("streamUrl".to_string(), Value::String(get_asset_url(&m_rel)));
+                    
+                    let duration_str = get_duration_str(Some(&Value::String(m_rel.clone())));
+                    item.insert("duration".to_string(), Value::String(duration_str));
+                    
+                    let mut img_saved = false;
+                    if let Some(art_b64) = item.get("artworkBase64").and_then(|v| v.as_str()) {
+                        if !art_b64.is_empty() {
+                            let b64c = if art_b64.contains(',') { art_b64.split(',').nth(1).unwrap() } else { art_b64 };
+                            if let Ok(by) = general_purpose::STANDARD.decode(b64c) {
+                                let ir = format!("library/images/{}.png", f_id);
+                                if force_save_as_png(&by, &base.join(&ir)) {
+                                    item.insert("imageFilename".to_string(), Value::String(ir.clone()));
+                                    item.insert("imageData".to_string(), Value::String(get_asset_url(&ir)));
+                                    img_saved = true;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if !img_saved {
+                        item.insert("imageFilename".to_string(), Value::String("library/images/default.png".to_string()));
+                        item.insert("imageData".to_string(), Value::String(get_asset_url("library/images/default.png")));
+                    }
+                    
+                    item.remove("artworkBase64");
+                    item.remove("relPath");
+                    item.remove("status");
+                    
+                    db.push(item);
+                    count += 1;
+                }
+            }
+        }
+    }
+    
+    if count > 0 { let _ = save_db(&db); }
     Ok(serde_json::json!({"status": "success", "count": count}))
 }

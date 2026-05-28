@@ -7,9 +7,9 @@
     background: rgba(0, 0, 0, 0.6);
     display: none;
     justify-content: center;
-    align-items: flex-start; /* コンテンツが大きい時に上が切れるのを防ぐ */
-    overflow-y: auto;        /* モーダル全体をスクロール可能に */
-    padding: 40px 20px;      /* 画面上下左右の最低限の余白 */
+    align-items: flex-start;
+    overflow-y: auto;        
+    padding: 40px 20px;      
     box-sizing: border-box;
     z-index: 2000;
     backdrop-filter: blur(8px);
@@ -25,9 +25,9 @@
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     position: relative;
     max-width: 90vw;
-    margin: auto;      /* 小さい時は縦横中央に自動配置させる */
+    margin: auto;      
     flex-shrink: 0;    
-    overflow: visible; /* はみ出しを許可して内部スクロールを無効化 */
+    overflow: visible; 
     color: var(--text-main);
     border: 1px solid rgba(128, 128, 128, 0.1);
 }
@@ -60,10 +60,11 @@
 .btn-close-circle:hover {
     background-color: #ef4444;
     color: white;
+    transform: rotate(90deg);
 }
 .btn-close-circle:active { opacity: 0; }
 
-/* --- アートワークミニタブ (インポート画面風) --- */
+/* --- アートワークミニタブ --- */
 .art-tabs-mini {
     display: flex;
     gap: 6px;
@@ -92,13 +93,8 @@
     box-shadow: var(--shadow-sm);
 }
 
-.art-mini-tab-content {
-    display: none;
-}
-
-.art-mini-tab-content.active {
-    display: block;
-}
+.art-mini-tab-content { display: none; }
+.art-mini-tab-content.active { display: block; }
 
 /* --- アルバムアート編集モーダル --- */
 .art-preview-area {
@@ -187,6 +183,29 @@
     cursor: pointer;
 }
 .btn-auto-lyric:hover { background: var(--primary-color); color: white; }
+
+/* ★追加：歌詞検索結果リストとプレビュー用スタイル */
+.modal-view { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+.lyric-result-list { 
+    list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; 
+    border: 1px solid rgba(128, 128, 128, 0.3); border-radius: 8px; background: var(--bg-color); 
+    max-height: 300px;
+}
+.lyric-result-item { 
+    padding: 14px; border-bottom: 1px solid rgba(128, 128, 128, 0.2); cursor: pointer; text-align: left; 
+}
+.lyric-result-item:hover { background: rgba(128, 128, 128, 0.1); }
+.lyric-result-item:last-child { border-bottom: none; }
+.lyric-item-title { font-weight: bold; color: var(--text-main); }
+.lyric-item-artist { font-size: 0.85rem; color: var(--text-sub); margin-top: 4px; }
+
+.lyric-preview { 
+    white-space: pre-wrap; font-size: 1rem; line-height: 2.2; 
+    background: var(--bg-color); padding: 20px; border-radius: 8px; border: 1px solid rgba(128, 128, 128, 0.3); 
+    overflow-y: auto; flex: 1; text-align: left; color: var(--text-main);
+    max-height: 300px;
+}
 
 /* --- 一括変更モーダル --- */
 .bulk-form-container {

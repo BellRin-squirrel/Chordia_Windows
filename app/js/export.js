@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const modalOverlay = document.getElementById('modalOverlay');
     const resultPathDisplay = document.getElementById('resultPath');
     const btnComplete = document.getElementById('btnComplete');
+    // パスワード入力要素
+    const exportPassword = document.getElementById('exportPassword');
 
     try {
         const defaultPath = await invoke("get_default_export_path");
@@ -41,14 +43,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         btnExport.innerHTML = 'エクスポート中...';
 
         try {
-            const result = await invoke("execute_export", { targets: targets, savePath: savePath });
+            // ★ 修正：パスワード入力欄の値を取得して送信する
+            const pass = exportPassword ? exportPassword.value : "";
+            
+            const result = await invoke("execute_export", { 
+                targets: targets, 
+                savePath: savePath,
+                password: pass
+            });
+            
             if (result.success) {
                 showToast("完了しました", false);
                 resultPathDisplay.textContent = result.path;
                 modalOverlay.classList.add('show');
-            } else { showToast(`エラー: ${result.message}`, true); }
-        } catch (e) { showToast("システムエラーが発生しました", true); } 
-        finally { btnExport.disabled = false; btnExport.innerHTML = 'エクスポートを実行'; }
+            } else { 
+                showToast(`エラー: ${result.message}`, true); 
+            }
+        } catch (e) { 
+            showToast("システムエラーが発生しました", true); 
+            console.error(e);
+        } 
+        finally { 
+            btnExport.disabled = false; 
+            btnExport.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg> エクスポートを実行`; 
+        }
     });
 
     btnComplete.addEventListener('click', () => window.location.href = 'index.html');

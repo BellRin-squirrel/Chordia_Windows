@@ -15,7 +15,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <script src="js/theme_head.js"></script>
     <script>
-        // ★修正：Tauri v2 APIを使用して、新しいウィンドウで開かれたか（ラベルが manage_window か）を安全に判定する
         document.addEventListener('DOMContentLoaded', () => {
             const isWindowMode = window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.window.getCurrentWindow().label === 'manage_window';
             if (isWindowMode || window.location.search.includes('mode=window')) {
@@ -169,7 +168,7 @@
                 <h3 style="margin: 0;">歌詞編集</h3>
                 <button type="button" id="btnAutoLyricManage" class="btn-auto-lyric">自動取得 (LRCLIB)</button>
             </div>
-            <p id="lyricTargetTitle" style="font-size: 0.9rem; color: var(--text-sub); margin-bottom: 12px; font-weight: bold;"></p>
+            <p id="lyricTargetTitle" style="font-size: 0.9rem; color: var(--text-sub); margin-bottom: 12px; font-weight: bold; text-align: left;"></p>
             <textarea id="lyricTextArea" placeholder="歌詞を入力..." style="height: 350px;"></textarea>
             <div class="modal-buttons">
                 <button id="btnCancelLyric" class="btn-cancel">キャンセル</button>
@@ -178,21 +177,23 @@
         </div>
     </div>
 
+    <!-- ★ 修正：歌詞検索ポップアップの構造を add_music 画面と同等に揃えました -->
     <div id="lyricSearchModalManage" class="modal-overlay" style="z-index: 2500;">
-        <div class="modal-content" style="width: 500px;">
-            <div id="lyricSearchListViewManage">
+        <div class="modal-content lyric-modal" style="width: 500px;">
+            <div id="lyricSearchListViewManage" class="modal-view">
                 <h3>歌詞の検索結果</h3>
-                <ul id="lyricResultListManage" class="lyric-result-list" style="list-style: none; padding: 0; max-height: 300px; overflow-y: auto; border-radius: 12px; border: 1px solid rgba(128,128,128,0.2);"></ul>
-                <div class="modal-buttons">
+                <p style="font-size: 0.85rem; color: var(--text-sub); margin-bottom: 12px; text-align: left;">確認したい歌詞をクリックしてください。</p>
+                <ul id="lyricResultListManage" class="lyric-result-list"></ul>
+                <div class="modal-buttons" style="margin-top: 20px;">
                     <button type="button" id="btnCancelLyricSearchManage" class="btn-cancel" style="width: 100%;">閉じる</button>
                 </div>
             </div>
-            <div id="lyricSearchDetailViewManage" style="display: none;">
+            <div id="lyricSearchDetailViewManage" class="modal-view" style="display: none;">
                 <h3>歌詞の確認</h3>
-                <div id="lyricPreviewTextManage" class="lyric-preview" style="height: 300px; background: var(--bg-color); border-radius: 12px; padding: 15px; overflow-y: auto; white-space: pre-wrap; text-align: left;"></div>
-                <div class="modal-buttons">
-                    <button type="button" id="btnBackToResultManage" class="btn-cancel">戻る</button>
-                    <button type="button" id="btnApplyLyricManage" class="btn-save">適用</button>
+                <div id="lyricPreviewTextManage" class="lyric-preview"></div>
+                <div class="modal-buttons" style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button type="button" id="btnBackToResultManage" class="btn-cancel" style="flex: 1;">一覧に戻る</button>
+                    <button type="button" id="btnApplyLyricManage" class="btn-save" style="flex: 1;">適用</button>
                 </div>
             </div>
         </div>

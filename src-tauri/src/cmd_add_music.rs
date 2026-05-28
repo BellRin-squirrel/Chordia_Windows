@@ -100,12 +100,15 @@ pub fn fetch_youtube_playlist(url: String) -> Value {
                 .filter(|i| i["title"] != "[Private video]" && i["title"] != "[Deleted video]")
                 .map(|i| {
                     let id = i["id"].as_str().unwrap_or("");
-                    // 修正：--flat-playlist で抜け落ちやすいサムネイルを動画IDから高解像度版（hqdefault）のURLとして確実かつスムーズに補完構築する
-                    let thumb_url = if !id.is_empty() {
+                    // ★ 修正：可能ならオリジナルのサムネイルを利用し、無ければ確実な hqdefault にフォールバック
+                    let thumb_url = if let Some(t) = i["thumbnail"].as_str() {
+                        t.to_string()
+                    } else if !id.is_empty() {
                         format!("https://img.youtube.com/vi/{}/hqdefault.jpg", id)
                     } else {
-                        i["thumbnail"].as_str().unwrap_or("").to_string()
+                        "".to_string()
                     };
+                    
                     serde_json::json!({
                         "title": i["title"], "uploader": i["uploader"], "duration": i["duration"], "thumbnail": thumb_url,
                         "url": i["url"].as_str().map(|s| s.into()).unwrap_or(format!("https://www.youtube.com/watch?v={}", id))
@@ -124,13 +127,28 @@ pub fn fetch_and_crop_thumbnail(url: String) -> Option<String> {
     let c = reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(10)).user_agent("Mozilla/5.0").build().ok()?;
     let b = c.get(&u).send().ok()?.bytes().ok()?;
     let i = image::load_from_memory(&b).ok()?;
-    let s = std::cmp::min(i.width(), i.height());
-    let mut ic = i.crop_imm((i.width()-s)/2, (i.height()-s)/2, s, s);
+    
+    let (width, height) = (i.width(), i.height());
+    
+    // ★ 修正：アスペクト比が 4:3 付近なら、YouTubeの黒帯（上下）があると判定して16:9部分だけをターゲットにする
+    let (eff_w, eff_h, off_x, off_y) = if (width as f32 / height as f32 - 1.333).abs() < 0.05 {
+        let real_h = (width as f32 * 9.0 / 16.0) as u32;
+        (width, real_h, 0, (height - real_h) / 2) // 上下の黒帯を計算してオフセットを適用
+    } else {
+        (width, height, 0, 0)
+    };
+
+    let s = std::cmp::min(eff_w, eff_h);
+    let mut ic = i.crop_imm(off_x + (eff_w - s) / 2, off_y + (eff_h - s) / 2, s, s);
+    
     if ic.color().has_alpha() {
         let mut bg = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(s, s, image::Rgba([255, 255, 255, 255])));
-        image::imageops::overlay(&mut bg, &ic, 0, 0); ic = bg;
+        image::imageops::overlay(&mut bg, &ic, 0, 0); 
+        ic = bg;
     }
-    let mut buf = std::io::Cursor::new(Vec::new()); ic.write_to(&mut buf, image::ImageFormat::Png).ok()?;
+    
+    let mut buf = std::io::Cursor::new(Vec::new()); 
+    ic.write_to(&mut buf, image::ImageFormat::Png).ok()?;
     Some(format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(buf.into_inner())))
 }
 
@@ -208,7 +226,6 @@ pub fn download_and_save_music(mut data: serde_json::Map<String, Value>, state: 
     data.insert("imageFilename".into(), i_rel.clone().into());
     data.insert("imageData".into(), get_asset_url(&i_rel).into());
 
-    // ★修正：新曲一括追加時、その場で曲の長さ（duration）を測定して挿入する
     let duration_str = get_duration_str(Some(&Value::String(m_rel)));
     data.insert("duration".to_string(), Value::String(duration_str));
     
@@ -238,7 +255,6 @@ pub fn save_music_data(mut data: serde_json::Map<String, Value>, state: State<'_
         data.insert("musicFilename".to_string(), Value::String(rel_music_path.clone()));
         data.insert("streamUrl".to_string(), Value::String(get_asset_url(&rel_music_path)));
 
-        // ★修正：新曲1曲追加時、その場で曲の長さ（duration）を測定して挿入する
         let duration_str = get_duration_str(Some(&Value::String(rel_music_path)));
         data.insert("duration".to_string(), Value::String(duration_str));
     }

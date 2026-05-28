@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 selectedThemeMode = opt.val;
                 customSelectValue.textContent = opt.label;
                 updateThemeUI();
-                saveAllSettings();
+                handleChange(); // 変更と同時に即時保存
                 customSelectDropdown.classList.remove('show');
             };
 
@@ -150,7 +150,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     updateThemeUI();
 
-    async function saveAllSettings() {
+    let saveTimeout = null;
+
+    // ★修正：全ての変更を即時反映・保存するメイン関数
+    async function saveAllSettings(showNotify = false) {
         const active_tags = Array.from(document.querySelectorAll('.chk-db:checked')).map(cb => cb.value);
         const player_visible_tags = Array.from(document.querySelectorAll('.chk-player:checked')).map(cb => cb.value);
 
@@ -183,7 +186,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             localStorage.setItem('theme_bg_color', newSettings.background_color);
             localStorage.setItem('theme_sub_bg_color', newSettings.sub_background_color);
             localStorage.setItem('theme_text_color', newSettings.text_color);
+
+            if (showNotify) showToast("設定を保存しました");
+        } else {
+            if (showNotify) showToast("保存に失敗しました", true);
         }
+    }
+
+    // デバウンスをかけた保存処理（カラーピッカーなどのドラッグ中用）
+    function handleInput() {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => saveAllSettings(false), 100);
+    }
+
+    // 確定時の保存処理
+    function handleChange() {
+        saveAllSettings(true);
     }
 
     chkDevMode.addEventListener('click', (e) => {
@@ -191,14 +209,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault(); 
             devWarningModal.style.display = 'flex';
         } else {
-            saveAllSettings();
+            handleChange();
         }
     });
 
     btnConfirmDev.addEventListener('click', () => {
         chkDevMode.checked = true;
         devWarningModal.style.display = 'none';
-        saveAllSettings();
+        handleChange();
         showToast("デベロッパーモードを有効にしました");
     });
 
@@ -207,8 +225,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         devWarningModal.style.display = 'none';
     });
 
+    // ★修正：各種入力フィールドの変更を監視して即時保存をフックする
     [itemsPerPage, chkNewWindow, chkManageNewWindow, primaryColor, backgroundColor, subBackgroundColor, textColor].forEach(el => {
-        if (el) el.addEventListener('change', saveAllSettings);
+        if (el) {
+            el.addEventListener('change', handleChange);
+            if (el.type === 'color' || el.type === 'number') {
+                // 色や数値のリアルタイム変更（ドラッグ等）でも随時保存とUI反映を行う
+                el.addEventListener('input', handleInput);
+            }
+        }
     });
 
     btnSaveOriginalTheme.addEventListener('click', () => {
@@ -233,7 +258,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             themeModal.style.display = 'none';
             selectedThemeMode = name;
             rebuildThemeOptions(name);
-            saveAllSettings();
+            saveAllSettings(false);
             showToast(`テーマ "${name}" を保存しました`);
         }
     });
@@ -247,7 +272,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 selectedThemeMode = 'custom';
                 rebuildThemeOptions('custom');
                 updateThemeUI();
-                saveAllSettings();
+                saveAllSettings(false);
                 showToast(`テーマ "${name}" を削除しました`);
             }
         }
@@ -268,8 +293,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             `;
             container.appendChild(li);
         });
+        
+        // ★修正：タグのチェックボックスが操作された際も即時保存
         container.querySelectorAll('input').forEach(chk => {
-            chk.addEventListener('change', saveAllSettings);
+            chk.addEventListener('change', handleChange);
         });
     }
     renderCombinedTagList();

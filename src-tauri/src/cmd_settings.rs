@@ -32,11 +32,31 @@ pub fn get_app_settings() -> AppSettings {
 
 #[tauri::command]
 pub fn save_app_settings(settings: AppSettings) -> bool {
-    let path = get_base_dir().join("userfiles/settings.ini");
+    let base = get_base_dir();
+    let dir = base.join("userfiles");
+    // ★修正: ファイルを作成する前に、確実に親ディレクトリを生成する
+    let _ = fs::create_dir_all(&dir);
+
+    let path = dir.join("settings.ini");
     let mut conf = Ini::load_from_file(&path).unwrap_or_else(|_| Ini::new());
-    conf.with_section(Some("Database")).set("items_per_page", settings.items_per_page.to_string()).set("open_player_new_window", settings.open_player_new_window.to_string()).set("open_manage_new_window", settings.open_manage_new_window.to_string()).set("developer_mode", settings.developer_mode.to_string()).set("lazy_load_playlists", settings.lazy_load_playlists.to_string());
-    conf.with_section(Some("Theme")).set("primary_color", settings.primary_color).set("background_color", settings.background_color).set("sub_background_color", settings.sub_background_color).set("text_color", settings.text_color).set("theme_mode", settings.theme_mode);
-    conf.with_section(Some("Tags")).set("active_tags", settings.active_tags.join(",")).set("player_visible_tags", settings.player_visible_tags.join(","));
+    conf.with_section(Some("Database"))
+        .set("items_per_page", settings.items_per_page.to_string())
+        .set("open_player_new_window", settings.open_player_new_window.to_string())
+        .set("open_manage_new_window", settings.open_manage_new_window.to_string())
+        .set("developer_mode", settings.developer_mode.to_string())
+        .set("lazy_load_playlists", settings.lazy_load_playlists.to_string());
+    
+    conf.with_section(Some("Theme"))
+        .set("primary_color", settings.primary_color)
+        .set("background_color", settings.background_color)
+        .set("sub_background_color", settings.sub_background_color)
+        .set("text_color", settings.text_color)
+        .set("theme_mode", settings.theme_mode);
+        
+    conf.with_section(Some("Tags"))
+        .set("active_tags", settings.active_tags.join(","))
+        .set("player_visible_tags", settings.player_visible_tags.join(","));
+        
     conf.write_to_file(path).is_ok()
 }
 
@@ -48,7 +68,9 @@ pub fn get_custom_themes() -> Value {
 
 #[tauri::command]
 pub fn save_custom_theme(name: String, colors: Value) -> bool {
-    let path = get_base_dir().join("userfiles/custom_themes.json");
+    let dir = get_base_dir().join("userfiles");
+    let _ = fs::create_dir_all(&dir);
+    let path = dir.join("custom_themes.json");
     let mut themes: serde_json::Map<String, Value> = fs::read_to_string(&path).ok().and_then(|d| serde_json::from_str(&d).ok()).unwrap_or_default();
     themes.insert(name, colors);
     serde_json::to_string_pretty(&themes).ok().and_then(|s| fs::write(path, s).ok()).is_some()

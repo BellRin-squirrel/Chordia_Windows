@@ -47,10 +47,11 @@
                 const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
                 await invoke("open_new_window", {
                     label: "mini_player_window",
-                    url: "mini_player.html",
+                    // ★ 修正：現在のURLをベースにした絶対URLとして組み立てる
+                    url: new URL("mini_player.html", window.location.href).href,
                     title: "Mini Player",
                     width: 256.0, 
-                    height: 750.0 // 修正：起動時は大規模モードのため高さを750.0に変更
+                    height: 750.0 
                 });
             } catch(e) {
                 console.error("Mini Player Launch Error:", e);
@@ -170,55 +171,55 @@
             const tabBtn = modal.querySelector(`.tab-btn[data-target="${targetTab}"]`);
             if (tabBtn) tabBtn.click();
             
-                    modal.classList.add('show');
-                },
+            modal.classList.add('show');
+        },
 
-                updateHeaderUI: function(song) {
-                    this.setTextWithMarquee(this.hpTitleContainer, song.title || 'Unknown', 'hp-title');
-                    
-                    const album = song.album || ''; 
-                    const artist = song.artist || '';
-                    let subText = "";
-                    if(album && artist) subText = `${album} - ${artist}`;
-                    else subText = album || artist;
-                    this.setTextWithMarquee(this.hpSubContainer, subText, 'hp-sub');
+        updateHeaderUI: function(song) {
+            this.setTextWithMarquee(this.hpTitleContainer, song.title || 'Unknown', 'hp-title');
+            
+            const album = song.album || ''; 
+            const artist = song.artist || '';
+            let subText = "";
+            if(album && artist) subText = `${album} - ${artist}`;
+            else subText = album || artist;
+            this.setTextWithMarquee(this.hpSubContainer, subText, 'hp-sub');
 
-                    const artSrc = song.imageData || s.DEFAULT_ICON;
-                    this.hpArtImg.src = artSrc;
-                },
+            const artSrc = song.imageData || s.DEFAULT_ICON;
+            this.hpArtImg.src = artSrc;
+        },
 
-                setTextWithMarquee: function(container, text, className) {
-                    container.innerHTML = `<div class="${className}">${u.escapeHtml(text)}</div>`;
-                    const element = container.firstElementChild;
-                    if (element && element.scrollWidth > container.clientWidth) {
-                        const escaped = u.escapeHtml(text);
-                        container.innerHTML = `<div class="marquee-wrapper"><span class="marquee-content">${escaped}</span><span class="marquee-content">${escaped}</span></div>`;
-                    }
-                },
+        setTextWithMarquee: function(container, text, className) {
+            container.innerHTML = `<div class="${className}">${u.escapeHtml(text)}</div>`;
+            const element = container.firstElementChild;
+            if (element && element.scrollWidth > container.clientWidth) {
+                const escaped = u.escapeHtml(text);
+                container.innerHTML = `<div class="marquee-wrapper"><span class="marquee-content">${escaped}</span><span class="marquee-content">${escaped}</span></div>`;
+            }
+        },
 
-                updatePlayIcons: function(isPlaying) {
-                    if (this.hdrBtnPlayPause) {
-                        if (isPlaying) {
-                            this.hdrBtnPlayPause.innerHTML = s.SVG_PAUSE;
-                            this.hdrBtnPlayPause.title = "一時停止 (Space)";
-                        } else {
-                            this.hdrBtnPlayPause.innerHTML = s.SVG_PLAY;
-                            this.hdrBtnPlayPause.title = "再生 (Space)";
-                        }
-                    }
-                },
-
-                updateToggleButtons: function() {
-                    if (this.btnShuffleToggle) {
-                        if (s.isShuffle) this.btnShuffleToggle.classList.add('active');
-                        else this.btnShuffleToggle.classList.remove('active');
-                    }
-
-                    if (this.btnLoopToggle) {
-                        this.btnLoopToggle.className = 'btn-icon-toggle';
-                        if (s.loopMode === 'all') this.btnLoopToggle.classList.add('active');
-                        else if (s.loopMode === 'one') this.btnLoopToggle.classList.add('active-one');
-                    }
+        updatePlayIcons: function(isPlaying) {
+            if (this.hdrBtnPlayPause) {
+                if (isPlaying) {
+                    this.hdrBtnPlayPause.innerHTML = s.SVG_PAUSE;
+                    this.hdrBtnPlayPause.title = "一時停止 (Space)";
+                } else {
+                    this.hdrBtnPlayPause.innerHTML = s.SVG_PLAY;
+                    this.hdrBtnPlayPause.title = "再生 (Space)";
                 }
-            };
-        })();
+            }
+        },
+
+        updateToggleButtons: function() {
+            if (this.btnShuffleToggle) {
+                if (s.isShuffle) this.btnShuffleToggle.classList.add('active');
+                else this.btnShuffleToggle.classList.remove('active');
+            }
+
+            if (this.btnLoopToggle) {
+                this.btnLoopToggle.className = 'btn-icon-toggle';
+                if (s.loopMode === 'all') this.btnLoopToggle.classList.add('active');
+                else if (s.loopMode === 'one') this.btnLoopToggle.classList.add('active-one');
+            }
+        }
+    };
+})();

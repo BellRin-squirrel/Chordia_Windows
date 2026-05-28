@@ -1,7 +1,6 @@
 (function() {
     const s = window.ManageState;
     const u = window.ManageUtils;
-    // Tauriのinvokeを取得
     const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
 
     window.ModalController = {
@@ -23,7 +22,6 @@
         ],
 
         init: function() {
-            // --- 共通閉じるボタン ---
             document.getElementById('btnCancelLyric').onclick = () => document.getElementById('lyricModal').classList.remove('show');
             document.getElementById('btnCloseLyricModalX').onclick = () => document.getElementById('lyricModal').classList.remove('show');
             document.getElementById('btnCancelArt').onclick = () => document.getElementById('artModal').classList.remove('show');
@@ -32,11 +30,9 @@
             document.getElementById('btnCancelBulkEdit').onclick = () => document.getElementById('bulkEditModal').classList.remove('show');
             document.getElementById('btnCloseAdvSearchModal').onclick = () => document.getElementById('advancedSearchModal').classList.remove('show');
 
-            // --- 歌詞保存 ---
             document.getElementById('btnSaveLyric').onclick = async () => {
                 const text = document.getElementById('lyricTextArea').value;
                 const item = s.libraryData[s.editingIndex];
-                // ★ 引数名を camelCase に修正
                 const success = await invoke("update_song_by_id", { 
                     musicFilename: item.musicFilename, 
                     field: 'lyric', 
@@ -50,15 +46,13 @@
                 }
             };
 
-            // --- 歌詞自動取得 (LRCLIB) ---
             document.getElementById('btnAutoLyricManage').onclick = () => this.searchLyrics();
             document.getElementById('btnCancelLyricSearchManage').onclick = () => document.getElementById('lyricSearchModalManage').classList.remove('show');
             document.getElementById('btnBackToResultManage').onclick = () => {
                 document.getElementById('lyricSearchDetailViewManage').style.display = 'none';
-                document.getElementById('lyricSearchListViewManage').style.display = 'block';
+                document.getElementById('lyricSearchListViewManage').style.display = 'flex';
             };
 
-            // --- アートワーク編集 ミニタブ切り替え ---
             const artMiniTabs = document.querySelectorAll('.art-mini-tab-btn');
             artMiniTabs.forEach(btn => {
                 btn.onclick = () => {
@@ -72,7 +66,6 @@
                 };
             });
 
-            // --- アートワーク: ローカルファイル選択 ---
             document.getElementById('newArtInput').onchange = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -85,7 +78,6 @@
                 reader.readAsDataURL(file);
             };
 
-            // --- アートワーク: 動画サムネイル取得 ---
             document.getElementById('btnFetchVideoArt').onclick = async () => {
                 const url = document.getElementById('miniVideoUrl').value.trim();
                 this.showArtError("");
@@ -101,7 +93,7 @@
                 btn.textContent = "確認中...";
 
                 try {
-                    const status = await invoke("check_tools_status"); // Rust門コマンドに変更（後で実装が必要なら）
+                    const status = await invoke("check_tools_status"); 
                     if (!status['yt-dlp'] || !status['ffmpeg']) {
                         this.showArtError("拡張機能が不足しています");
                         return;
@@ -131,7 +123,6 @@
                 }
             };
 
-            // --- アートワーク: 画像URL取得 ---
             document.getElementById('btnFetchDirectArt').onclick = async () => {
                 const url = document.getElementById('miniImageUrl').value.trim();
                 this.showArtError("");
@@ -160,7 +151,6 @@
                 this.showArtError("");
             };
 
-            // --- アートワーク: 保存処理 ---
             document.getElementById('btnSaveArt').onclick = async () => {
                 const btn = document.getElementById('btnSaveArt');
                 const originalText = btn.textContent;
@@ -178,7 +168,6 @@
                 try {
                     const isRemove = (s.newArtBase64 === "REMOVE");
                     const b64 = isRemove ? null : s.newArtBase64;
-                    // ★ 引数名を camelCase に修正
                     const success = await invoke("update_song_artwork_by_id", { 
                         musicFilename: item.musicFilename, 
                         newArtBase64: b64, 
@@ -200,10 +189,8 @@
                 }
             };
 
-            // --- 削除実行 ---
             document.getElementById('btnExecDelete').onclick = async () => {
                 const item = s.libraryData[s.editingIndex];
-                // ★ 引数名を camelCase に修正
                 const success = await invoke("delete_song_by_id", { musicFilename: item.musicFilename });
                 if (success) {
                     u.showToast("削除しました", false);
@@ -212,10 +199,8 @@
                 }
             };
 
-            // --- 一括変更実行 ---
             document.getElementById('btnExecBulkEdit').onclick = () => this.executeBulkEdit();
 
-            // --- 高度な検索ボタン群 ---
             document.getElementById('btnClearAdvSearch').onclick = () => this.clearAdvancedSearch();
             document.getElementById('btnApplyAdvSearch').onclick = () => this.applyAdvancedSearch();
 
@@ -277,6 +262,7 @@
             document.getElementById('deleteModal').classList.add('show');
         },
 
+        // ★修正：検索結果リストの要素生成ロジックを変更
         searchLyrics: async function() {
             const item = s.libraryData[s.editingIndex];
             if (!item.title || !item.artist) { u.showToast("タイトルとアーティストが必要です", true); return; }
@@ -295,11 +281,14 @@
                     filtered.forEach(d => {
                         const li = document.createElement('li');
                         li.className = 'lyric-result-item';
-                        li.innerHTML = `<strong>${u.escapeHtml(d.trackName)}</strong><br><small>${u.escapeHtml(d.artistName)}</small>`;
+                        li.innerHTML = `
+                            <div class="lyric-item-title">${u.escapeHtml(d.trackName)}</div>
+                            <div class="lyric-item-artist">${u.escapeHtml(d.artistName)}</div>
+                        `;
                         li.onclick = () => {
                             document.getElementById('lyricPreviewTextManage').textContent = d.plainLyrics;
                             document.getElementById('lyricSearchListViewManage').style.display = 'none';
-                            document.getElementById('lyricSearchDetailViewManage').style.display = 'block';
+                            document.getElementById('lyricSearchDetailViewManage').style.display = 'flex';
                             document.getElementById('btnApplyLyricManage').onclick = () => {
                                 document.getElementById('lyricTextArea').value = d.plainLyrics;
                                 document.getElementById('lyricSearchModalManage').classList.remove('show');
@@ -307,7 +296,7 @@
                         };
                         list.appendChild(li);
                     });
-                    document.getElementById('lyricSearchListViewManage').style.display = 'block';
+                    document.getElementById('lyricSearchListViewManage').style.display = 'flex';
                     document.getElementById('lyricSearchDetailViewManage').style.display = 'none';
                     document.getElementById('lyricSearchModalManage').classList.add('show');
                 }
