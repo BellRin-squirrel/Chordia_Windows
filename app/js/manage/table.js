@@ -34,7 +34,6 @@
                 s.searchQuery = s.searchQuery || "";
                 s.advancedConditions = s.advancedConditions || null; 
                 
-                // ★ 引数名を Rustの snake_case から JSの camelCase 形式に変更
                 s.totalItems = await invoke("get_library_count", {
                     searchQuery: s.searchQuery,
                     advancedConditions: s.advancedConditions
@@ -87,7 +86,6 @@
         fetchChunk: async function() {
             const limit = s.isSelectionMode ? 0 : (s.isShowAll ? 0 : s.itemsPerPage);
             
-            // ★ 引数名を camelCase 形式に変更
             s.libraryData = await invoke("get_library_chunk", {
                 page: s.currentPage,
                 limit: limit,
@@ -344,13 +342,13 @@
         startEdit: function(td, index, field) {
             if (s.isSelectionMode) return;
             const originalText = td.textContent.trim();
-            td.innerHTML = `<input type="text" class="inline-input" value="${originalText}">`;
+            // ★修正: ダブルクォーテーションが含まれていても崩れないようエスケープする
+            td.innerHTML = `<input type="text" class="inline-input" value="${u.escapeHtml(originalText)}">`;
             const input = td.querySelector('input');
             
             const commitEdit = async () => {
                 if (input.value !== originalText) {
                     const item = s.libraryData[index];
-                    // ★ invokeのキー名を camelCase に修正
                     const success = await invoke("update_song_by_id", {
                         musicFilename: item.musicFilename,
                         field: field,

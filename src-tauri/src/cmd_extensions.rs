@@ -2,29 +2,81 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 use std::fs;
 use std::io::Read;
+use std::os::windows::process::CommandExt;
 use crate::utils::get_base_dir;
 
 #[tauri::command]
 pub async fn check_tool_updates() -> Result<Value, String> {
-    let base = get_base_dir().join("userfiles/bin");
-    let mut results = serde_json::Map::new();
+    // ★ 修正：プロセス起動処理が非同期スレッドプールをブロックしないよう spawn_blocking で保護
+    tokio::task::spawn_blocking(move || {
+        let base = get_base_dir().join("userfiles/bin");
+        let mut results = serde_json::Map::new();
 
-    for tool in ["yt-dlp", "ffmpeg", "deno"] {
-        let exe_path = base.join(format!("{}.exe", tool));
-        let exists = exe_path.exists();
-        let local = if exists { "インストール済み".to_string() } else { "未インストール".to_string() };
-        results.insert(tool.to_string(), serde_json::json!({
-            "updateNeeded": !exists,
-            "localVersion": local,
-            "latestVersion": "最新版"
-        }));
-    }
-    Ok(Value::Object(results))
+        // 1. クリーンアップ処理
+        let allowed_files = ["yt-dlp.exe", "ffmpeg.exe", "deno.exe"];
+        if let Ok(entries) = fs::read_dir(&base) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                        if !allowed_files.contains(&file_name) {
+                            let _ = fs::remove_file(path);
+                        }
+                    }
+                } else if path.is_dir() {
+                    let _ = fs::remove_dir_all(path);
+                }
+            }
+        }
+
+        // 2. 整合性チェックとバージョン情報の生成
+        for tool in ["yt-dlp", "ffmpeg", "deno"] {
+            let exe_path = base.join(format!("{}.exe", tool));
+            let exists = exe_path.exists();
+            
+            let mut is_valid = false;
+            if exists {
+                if let Ok(m) = fs::metadata(&exe_path) {
+                    if m.len() >= 10240 {
+                        let (arg, keyword) = match tool {
+                            "yt-dlp" => ("--help", "yt-dlp"), 
+                            "ffmpeg" => ("-version", "ffmpeg"),
+                            "deno" => ("--version", "deno"),
+                            _ => ("--version", ""),
+                        };
+                        
+                        if let Ok(out) = std::process::Command::new(&exe_path).arg(arg).creation_flags(0x08000000).output() {
+                            let stdout = String::from_utf8_lossy(&out.stdout).to_lowercase();
+                            let stderr = String::from_utf8_lossy(&out.stderr).to_lowercase();
+                            is_valid = stdout.contains(keyword) || stderr.contains(keyword);
+                        }
+                    }
+                }
+            }
+
+            let update_needed = !exists || !is_valid;
+            
+            let local_version = if !exists {
+                "未インストール".to_string()
+            } else if !is_valid {
+                "正しいファイルではありません".to_string()
+            } else {
+                "インストール済み".to_string()
+            };
+
+            results.insert(tool.to_string(), serde_json::json!({
+                "updateNeeded": update_needed,
+                "localVersion": local_version,
+                "latestVersion": "最新版",
+                "isValid": is_valid
+            }));
+        }
+        Ok(Value::Object(results))
+    }).await.map_err(|e| format!("チェック処理スレッドエラー: {}", e))?
 }
 
 #[tauri::command]
 pub async fn install_tool(tool_name: String, app: AppHandle) -> Result<(), String> {
-    // ネットワークI/Oとファイル処理でUIをブロックしないように非同期スレッドへ逃がす
     tokio::task::spawn_blocking(move || {
         let base_dir = get_base_dir().join("userfiles/bin");
         let _ = fs::create_dir_all(&base_dir);
@@ -48,7 +100,7 @@ pub async fn install_tool(tool_name: String, app: AppHandle) -> Result<(), Strin
         
         let total_size = response.content_length().unwrap_or(0);
         let mut downloaded: u64 = 0;
-        let mut buffer = vec![0; 32768]; // 32KBバッファ
+        let mut buffer = vec![0; 32768]; 
         let mut data = Vec::new();
         
         loop {
@@ -57,7 +109,6 @@ pub async fn install_tool(tool_name: String, app: AppHandle) -> Result<(), Strin
             data.extend_from_slice(&buffer[..bytes_read]);
             downloaded += bytes_read as u64;
             
-            // フロントエンドに進捗をリアルタイムで送信
             let _ = app.emit("update_ext_download_progress", serde_json::json!({
                 "toolName": tool_name,
                 "downloaded": downloaded,
@@ -65,7 +116,6 @@ pub async fn install_tool(tool_name: String, app: AppHandle) -> Result<(), Strin
             }));
         }
 
-        // 解凍フェーズのUI更新シグナル
         let _ = app.emit("update_ext_download_progress", serde_json::json!({
             "toolName": tool_name,
             "downloaded": "extracting",

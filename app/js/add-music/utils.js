@@ -5,7 +5,7 @@ if (window.__TAURI__) {
     // 万が一Tauri環境外で開いた場合のデバッグ用フォールバック
     window.tauriInvoke = async (cmd, args) => {
         console.warn(`[Tauri Mock] '${cmd}' が呼ばれました。引数:`, args);
-        return { status: "success" }; // 仮のレスポンス
+        return { status: "success" }; 
     };
 }
 
@@ -45,9 +45,18 @@ window.AddMusicUtils = {
         }
     },
 
+    // ★修正: ダブルクォーテーションやシングルクォーテーションも確実にエスケープする
     escapeHtml: function(text) {
-        if (!text) return '';
-        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        if (text === null || text === undefined) return '';
+        return String(text).replace(/[&<>"']/g, function(match) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[match];
+        });
     },
 
     readFileAsBase64: function(file) {

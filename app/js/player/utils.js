@@ -26,9 +26,18 @@ window.PlayerUtils = {
         toast.className = 'toast show ' + (isErr ? 'error' : 'success');
         setTimeout(() => toast.classList.remove('show'), 3000);
     },
+    // ★修正: ダブルクォーテーションやシングルクォーテーションも確実にエスケープする
     escapeHtml: function(text) {
-        if (!text) return '';
-        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        if (text === null || text === undefined) return '';
+        return String(text).replace(/[&<>"']/g, function(match) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[match];
+        });
     },
     formatTime: function(seconds) {
         const m = Math.floor(seconds / 60); 

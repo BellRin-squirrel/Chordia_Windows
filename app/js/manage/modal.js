@@ -262,7 +262,7 @@
             document.getElementById('deleteModal').classList.add('show');
         },
 
-        // ★修正：検索結果リストの要素生成ロジックを変更
+        // ★ 修正：Rustコマンド経由での歌詞取得に変更
         searchLyrics: async function() {
             const item = s.libraryData[s.editingIndex];
             if (!item.title || !item.artist) { u.showToast("タイトルとアーティストが必要です", true); return; }
@@ -270,8 +270,18 @@
             const originalText = btn.textContent;
             btn.textContent = "検索中..."; btn.disabled = true;
             try {
-                const res = await fetch(`https://lrclib.net/api/search?track_name=${encodeURIComponent(item.title)}&artist_name=${encodeURIComponent(item.artist)}`);
-                const data = await res.json();
+                const data = await invoke("search_lyrics_online", { title: item.title, artist: item.artist });
+                
+                if (data.statusCode === 404 || data.error) {
+                    u.showToast("見つかりませんでした", true);
+                    return;
+                }
+                
+                if (!Array.isArray(data) || data.length === 0) {
+                    u.showToast("見つかりませんでした", true);
+                    return;
+                }
+
                 const filtered = data.filter(d => d.plainLyrics);
                 if (filtered.length === 0) {
                     u.showToast("見つかりませんでした", true);
@@ -300,7 +310,7 @@
                     document.getElementById('lyricSearchDetailViewManage').style.display = 'none';
                     document.getElementById('lyricSearchModalManage').classList.add('show');
                 }
-            } catch(e) { u.showToast("検索エラー", true); }
+            } catch(e) { u.showToast("通信エラーが発生しました", true); }
             finally { btn.textContent = originalText; btn.disabled = false; }
         },
 

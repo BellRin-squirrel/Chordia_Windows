@@ -10,10 +10,24 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(()=>t.classList.remove('show'), 4000);
         },
         showAlert: (t, m) => {
-            document.getElementById('alertTitle').textContent = t;
-            document.getElementById('alertMessage').textContent = m;
             const modal = document.getElementById('alertModal');
-            modal.style.display = 'flex'; modal.classList.add('show');
+            const btnOk = document.getElementById('btnAlertOk');
+            const titleEl = document.getElementById('alertTitle');
+            const msgEl = document.getElementById('alertMessage');
+            
+            if (titleEl) titleEl.textContent = t;
+            if (msgEl) msgEl.textContent = m;
+            
+            if (modal) {
+                modal.style.display = 'flex'; 
+                setTimeout(() => modal.classList.add('show'), 10);
+            }
+            if (btnOk && modal) {
+                btnOk.onclick = () => {
+                    modal.classList.remove('show');
+                    setTimeout(() => modal.style.display = 'none', 300);
+                };
+            }
         }
     };
 
@@ -32,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let scannedData = [];
     let importMode = 'list'; 
+    let currentZipPassword = ""; // ★ 展開用のパスワード保持変数
 
     const tabs = document.querySelectorAll('.tab-btn');
     const contents = document.querySelectorAll('.tab-content');
@@ -45,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- 共通: ドラッグ＆ドロップセットアップ ---
     function setupDragAndDrop(element, callback) {
         if (!element) return;
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -62,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- TAB 1: リスト (JSON/CSV) インポート ---
     const dropArea = document.getElementById('dropArea');
     const fileInput = document.getElementById('fileInput');
     const btnScanList = document.getElementById('btnScanList');
@@ -103,7 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if(btnExecList) btnExecList.onclick = () => handleFinalImportWithCheck('list');
 
 
-    // --- TAB 2: ZIP インポート ---
     const dropAreaZip = document.getElementById('dropAreaZip');
     const fileInputZip = document.getElementById('fileInputZip');
     const zipFileInfo = document.getElementById('zipFileInfo');
@@ -124,12 +136,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (zipFileInfo) zipFileInfo.style.display = 'flex';
         if (btnScanZip) btnScanZip.disabled = false;
         window._selectedZipFile = file;
+        currentZipPassword = ""; // ファイル変更時にパスワードをリセット
     }
 
     if(btnClearZipFile) {
         btnClearZipFile.onclick = () => {
             if(fileInputZip) fileInputZip.value = '';
             window._selectedZipFile = null;
+            currentZipPassword = "";
             if(zipFileInfo) zipFileInfo.style.display = 'none';
             if(dropAreaZip) dropAreaZip.style.display = 'block';
             if(btnScanZip) btnScanZip.disabled = true;
@@ -138,10 +152,35 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    if(btnScanZip) btnScanZip.onclick = async () => {
+    // ★ 修正：パスワード入力モーダルの制御
+    if(btnScanZip) btnScanZip.onclick = () => {
         const file = window._selectedZipFile;
         if (!file) return;
-        
+        document.getElementById('zipPassword').value = '';
+        const pModal = document.getElementById('passwordModal');
+        pModal.style.display = 'flex';
+        setTimeout(() => pModal.classList.add('show'), 10);
+    };
+
+    document.getElementById('btnCancelPass').onclick = () => {
+        const pModal = document.getElementById('passwordModal');
+        pModal.classList.remove('show');
+        setTimeout(() => pModal.style.display = 'none', 300);
+    };
+
+    document.getElementById('btnSubmitPass').onclick = async () => {
+        const passVal = document.getElementById('zipPassword').value;
+        if (passVal.length > 128) {
+            u.showToast("パスワードは128文字以内にしてください", true);
+            return;
+        }
+        currentZipPassword = passVal;
+
+        const pModal = document.getElementById('passwordModal');
+        pModal.classList.remove('show');
+        setTimeout(() => pModal.style.display = 'none', 300);
+
+        const file = window._selectedZipFile;
         if (progressArea) progressArea.style.display = 'flex';
         if (progressText) progressText.textContent = "ZIPファイルを解析中...";
         
@@ -151,7 +190,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.onload = e => resolve(e.target.result.split(',')[1]);
                 reader.readAsDataURL(file);
             });
-            const res = await invoke("scan_zip_import", { zipDataB64: base64Data });
+            // パスワードを付与して解析
+            const res = await invoke("scan_zip_import", { zipDataB64: base64Data, password: currentZipPassword });
             if (res.status === 'success') {
                 scannedData = res.data;
                 renderTable('zip');
@@ -170,8 +210,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnExecZipImport = document.getElementById('btnExecZipImport');
     if(btnExecZipImport) btnExecZipImport.onclick = () => handleFinalImportWithCheck('zip');
 
-
-    // --- 共通: 重複チェックと本登録 ---
     async function handleFinalImportWithCheck(type) {
         const duplicates = await invoke("check_import_duplicates", { importList: scannedData });
         if (duplicates.length === 0) {
@@ -196,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 reader.onload = e => resolve(e.target.result.split(',')[1]);
                 reader.readAsDataURL(file);
             });
-            res = await invoke("execute_zip_import", { zipDataB64: b64, importDataList: dataList });
+            res = await invoke("execute_zip_import", { zipDataB64: b64, importDataList: dataList, password: currentZipPassword });
         }
         
         if (progressArea) progressArea.style.display = 'none';
@@ -235,6 +273,56 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const btnAlertOk = document.getElementById('btnAlertOk');
-    if(btnAlertOk) btnAlertOk.onclick = () => document.getElementById('alertModal').classList.remove('show');
+    let currentEditIndex = -1;
+    const btnAutoLyric = document.getElementById('btnAutoLyric');
+    if (btnAutoLyric) {
+        btnAutoLyric.onclick = async () => {
+            const item = scannedData[currentEditIndex];
+            if (!item || !item.title || !item.artist) {
+                u.showToast("タイトルとアーティストが必要です", true);
+                return;
+            }
+            const orgText = btnAutoLyric.textContent;
+            btnAutoLyric.textContent = "検索中...";
+            btnAutoLyric.disabled = true;
+
+            try {
+                const data = await invoke("search_lyrics_online", { title: item.title, artist: item.artist });
+
+                if (data.statusCode === 404 || data.error) {
+                    u.showToast("見つかりませんでした", true);
+                    return;
+                }
+
+                if (!Array.isArray(data) || data.length === 0) {
+                    u.showToast("見つかりませんでした", true);
+                    return;
+                }
+
+                const filtered = data.filter(d => d.plainLyrics);
+                if (filtered.length > 0) {
+                    const list = document.getElementById('lyricResultList');
+                    list.innerHTML = '';
+                    filtered.forEach(d => {
+                        const li = document.createElement('li');
+                        li.style.padding = '10px'; li.style.cursor = 'pointer'; li.style.borderBottom = '1px solid rgba(128,128,128,0.2)';
+                        li.innerHTML = `<strong>${u.escapeHtml(d.trackName)}</strong><br><small>${u.escapeHtml(d.artistName)}</small>`;
+                        li.onclick = () => {
+                            document.getElementById('lyricTextArea').value = d.plainLyrics;
+                            document.getElementById('lyricSearchModal').classList.remove('show');
+                        };
+                        list.appendChild(li);
+                    });
+                    document.getElementById('lyricSearchModal').classList.add('show');
+                } else {
+                    u.showToast("見つかりませんでした", true);
+                }
+            } catch (e) {
+                u.showToast("通信エラーが発生しました", true);
+            } finally {
+                btnAutoLyric.textContent = orgText;
+                btnAutoLyric.disabled = false;
+            }
+        };
+    }
 });

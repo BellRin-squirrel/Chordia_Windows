@@ -25,17 +25,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     let pendingUpdates = [];
 
+    // ★ 修正：アラート表示ロジックに display の切り替えと閉じる処理を統合
     function showAlert(title, message, isError = false) {
         if (!alertModal) return;
         alertTitle.textContent = title;
         alertTitle.style.color = isError ? '#ef4444' : 'var(--text-main)';
         alertMessage.innerText = message;
-        alertModal.classList.add('show');
+        
+        alertModal.style.display = 'flex';
+        setTimeout(() => alertModal.classList.add('show'), 10);
+
+        if (btnAlertOk) {
+            btnAlertOk.onclick = () => {
+                alertModal.classList.remove('show');
+                // フェードアウトアニメーション完了後に完全に非表示にする
+                setTimeout(() => alertModal.style.display = 'none', 300);
+            };
+        }
     }
 
-    if (btnAlertOk) btnAlertOk.onclick = () => alertModal.classList.remove('show');
-
-    // ★ Rustからの進捗を受信
     if (listen) {
         listen('update_ext_download_progress', (event) => {
             const { toolName, downloaded, total } = event.payload;
@@ -67,7 +75,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         for (const [tool, isInstalled] of Object.entries(status)) {
             const item = document.createElement('div');
             item.className = `tool-item ${isInstalled ? 'installed' : 'not-installed'}`;
-            item.innerHTML = `<div class="tool-info"><span class="tool-name">${tool}</span><span class="tool-desc">${TOOL_DETAILS[tool]}</span></div><span class="tool-status">${isInstalled ? 'インストール済み' : '未インストール'}</span>`;
+            item.innerHTML = `<div class="tool-info"><span class="tool-name">${tool}</span><span class="tool-desc">${TOOL_DETAILS[tool]}</span></div><span class="tool-status">${isInstalled ? '正常にインストール済み' : '未インストール (または不正なファイル)'}</span>`;
             toolsList.appendChild(item);
         }
     }
@@ -80,8 +88,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             btnMainAction.disabled = false;
             btnMainAction.onclick = () => checkForUpdates();
         } else {
-            actionTitle.textContent = "不足しているツールがあります";
-            btnMainAction.textContent = "不足分をダウンロード";
+            actionTitle.textContent = "不足・不正なツールがあります";
+            btnMainAction.textContent = "再ダウンロードを実行";
             btnMainAction.disabled = false;
             btnMainAction.onclick = () => installTools(missingTools);
         }
@@ -104,13 +112,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         for (const [tool, info] of Object.entries(results)) {
             const item = document.createElement('div');
             if (info.updateNeeded) { updateCount++; pendingUpdates.push(tool); }
+            
+            const isCorrupted = info.localVersion.includes("正しいファイルではありません");
+            const localVersionHtml = isCorrupted 
+                ? `<span style="color:#ef4444; font-weight:bold;">${info.localVersion}</span>` 
+                : info.localVersion;
+
             item.className = `tool-item ${info.updateNeeded ? 'not-installed' : 'installed'}`;
-            item.innerHTML = `<div class="tool-info"><span class="tool-name">${tool}</span><span class="tool-desc">${info.localVersion} → ${info.latestVersion}</span></div><span class="tool-status">${info.updateNeeded ? '要更新' : '最新'}</span>`;
+            item.innerHTML = `
+                <div class="tool-info">
+                    <span class="tool-name">${tool}</span>
+                    <span class="tool-desc">${localVersionHtml} → ${info.latestVersion}</span>
+                </div>
+                <span class="tool-status">${info.updateNeeded ? (isCorrupted ? '再インストール' : '要更新') : '最新'}</span>
+            `;
             updateResultList.appendChild(item);
         }
         updateCard.style.display = 'block';
         btnExecUpdate.disabled = updateCount === 0;
-        btnExecUpdate.textContent = updateCount > 0 ? "アップデートを実行" : "すべて最新版です";
+        btnExecUpdate.textContent = updateCount > 0 ? "アップデート・修復を実行" : "すべて最新版で正常です";
         btnExecUpdate.onclick = () => installTools(pendingUpdates);
     }
 
@@ -122,11 +142,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             for (const tool of toolsToInstall) {
                 await invoke("install_tool", { toolName: tool });
             }
-            showAlert("完了", "すべてのツールを更新しました。");
+            showAlert("完了", "すべてのツールを更新・修復しました。");
         } catch (e) { showAlert("エラー", e, true); }
         progressArea.style.display = 'none';
-        checkStatus();
+        
+        await checkStatus();
     }
 
-    checkStatus();
+    await checkStatus();
 });

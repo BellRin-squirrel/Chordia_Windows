@@ -12,6 +12,60 @@ use crate::AppState;
 use crate::types::*;
 use crate::utils::*;
 
+fn verify_tool_executable(tool: &str) -> Result<(), String> {
+    let b = crate::utils::get_base_dir().join("userfiles/bin");
+    
+    let allowed_files = ["yt-dlp.exe", "ffmpeg.exe", "deno.exe"];
+    if let Ok(entries) = std::fs::read_dir(&b) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if !allowed_files.contains(&file_name) {
+                        let _ = std::fs::remove_file(path);
+                    }
+                }
+            } else if path.is_dir() {
+                let _ = std::fs::remove_dir_all(path);
+            }
+        }
+    }
+
+    let exe = b.join(format!("{}.exe", tool));
+    if !exe.exists() {
+        return Err(format!("{} が見つかりません。拡張機能画面でインストールしてください。", tool));
+    }
+    
+    let is_valid = if let Ok(m) = std::fs::metadata(&exe) {
+        if m.len() < 10240 {
+            false 
+        } else {
+            let (arg, keyword) = match tool {
+                "yt-dlp" => ("--help", "yt-dlp"),
+                "ffmpeg" => ("-version", "ffmpeg"),
+                "deno" => ("--version", "deno"),
+                _ => ("--version", tool),
+            };
+            if let Ok(out) = std::process::Command::new(&exe).arg(arg).creation_flags(0x08000000).output() {
+                let stdout = String::from_utf8_lossy(&out.stdout).to_lowercase();
+                let stderr = String::from_utf8_lossy(&out.stderr).to_lowercase();
+                stdout.contains(keyword) || stderr.contains(keyword)
+            } else { 
+                false 
+            }
+        }
+    } else { 
+        false 
+    };
+
+    if !is_valid {
+        return Err(format!("{} が不正なファイルです。拡張機能画面で正しいものをインストールしなおしてください。", tool));
+    }
+    
+    Ok(())
+}
+
+
 #[tauri::command]
 pub fn get_default_art_url() -> String { get_asset_url("library/images/default.png") }
 
@@ -71,14 +125,24 @@ pub fn check_duplicate_songs(title: String, artist: String, state: State<'_, App
     }).collect()
 }
 
+// ★ 修正：非同期コマンド化し、重いプロセス起動を spawn_blocking に移譲
 #[tauri::command]
-pub fn check_tools_status() -> Value {
-    let b = get_base_dir().join("userfiles/bin");
-    serde_json::json!({"yt-dlp": b.join("yt-dlp.exe").exists(), "ffmpeg": b.join("ffmpeg.exe").exists(), "deno": b.join("deno.exe").exists()})
+pub async fn check_tools_status() -> Result<Value, String> {
+    tokio::task::spawn_blocking(|| {
+        Ok(serde_json::json!({
+            "yt-dlp": verify_tool_executable("yt-dlp").is_ok(),
+            "ffmpeg": verify_tool_executable("ffmpeg").is_ok(),
+            "deno": verify_tool_executable("deno").is_ok()
+        }))
+    }).await.map_err(|e| format!("ステータス確認スレッドエラー: {}", e))?
 }
 
 #[tauri::command]
 pub fn fetch_video_info(url: String) -> Value {
+    if let Err(msg) = verify_tool_executable("yt-dlp") {
+        return serde_json::json!({"status": "error", "message": msg});
+    }
+
     let exe = get_base_dir().join("userfiles/bin/yt-dlp.exe");
     let out = std::process::Command::new(exe).args(&["--dump-json", "--no-playlist", "--skip-download", &url]).creation_flags(0x08000000).output();
     match out {
@@ -92,6 +156,10 @@ pub fn fetch_video_info(url: String) -> Value {
 
 #[tauri::command]
 pub fn fetch_youtube_playlist(url: String) -> Value {
+    if let Err(msg) = verify_tool_executable("yt-dlp") {
+        return serde_json::json!({"status": "error", "message": msg});
+    }
+
     let exe = get_base_dir().join("userfiles/bin/yt-dlp.exe");
     let out = std::process::Command::new(exe).args(&["--dump-json", "--flat-playlist", &url]).creation_flags(0x08000000).output();
     match out {
@@ -100,7 +168,6 @@ pub fn fetch_youtube_playlist(url: String) -> Value {
                 .filter(|i| i["title"] != "[Private video]" && i["title"] != "[Deleted video]")
                 .map(|i| {
                     let id = i["id"].as_str().unwrap_or("");
-                    // ★ 修正：可能ならオリジナルのサムネイルを利用し、無ければ確実な hqdefault にフォールバック
                     let thumb_url = if let Some(t) = i["thumbnail"].as_str() {
                         t.to_string()
                     } else if !id.is_empty() {
@@ -129,11 +196,9 @@ pub fn fetch_and_crop_thumbnail(url: String) -> Option<String> {
     let i = image::load_from_memory(&b).ok()?;
     
     let (width, height) = (i.width(), i.height());
-    
-    // ★ 修正：アスペクト比が 4:3 付近なら、YouTubeの黒帯（上下）があると判定して16:9部分だけをターゲットにする
     let (eff_w, eff_h, off_x, off_y) = if (width as f32 / height as f32 - 1.333).abs() < 0.05 {
         let real_h = (width as f32 * 9.0 / 16.0) as u32;
-        (width, real_h, 0, (height - real_h) / 2) // 上下の黒帯を計算してオフセットを適用
+        (width, real_h, 0, (height - real_h) / 2) 
     } else {
         (width, height, 0, 0)
     };
@@ -186,6 +251,9 @@ pub fn download_original_thumbnail(url: String) -> Value {
 
 #[tauri::command]
 pub fn download_and_save_music(mut data: serde_json::Map<String, Value>, state: State<'_, AppState>) -> Result<bool, String> {
+    verify_tool_executable("yt-dlp")?;
+    verify_tool_executable("ffmpeg")?;
+
     let base = get_base_dir();
     let bin = base.join("userfiles/bin");
     let url = data.get("video_url").and_then(|v| v.as_str()).ok_or("No URL")?.to_string();

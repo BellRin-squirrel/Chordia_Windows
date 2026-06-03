@@ -164,7 +164,8 @@
         <div class="modal-content" style="width: 400px;">
             <h3>パスワードが必要です</h3>
             <p style="margin-bottom: 20px;">このZIPファイルは保護されています。</p>
-            <input type="password" id="zipPassword" class="edit-input" placeholder="パスワードを入力" style="margin-bottom: 20px;">
+            <!-- ★ 修正：maxlength="128" を追加 -->
+            <input type="password" id="zipPassword" class="edit-input" placeholder="パスワードを入力" maxlength="128" style="margin-bottom: 20px;">
             <div class="modal-buttons">
                 <button class="btn-secondary" id="btnCancelPass">キャンセル</button>
                 <button class="btn-primary" id="btnSubmitPass">確定</button>

@@ -12,7 +12,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const modalOverlay = document.getElementById('modalOverlay');
     const resultPathDisplay = document.getElementById('resultPath');
     const btnComplete = document.getElementById('btnComplete');
-    // パスワード入力要素
     const exportPassword = document.getElementById('exportPassword');
 
     try {
@@ -39,13 +38,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (!Object.values(targets).includes(true)) { showToast("項目を1つ以上選択してください", true); return; }
 
+        // ★ 修正: JS側でも128文字チェックを行う
+        const pass = exportPassword ? exportPassword.value : "";
+        if (pass.length > 128) {
+            showToast("パスワードは128文字以内にしてください", true);
+            return;
+        }
+
         btnExport.disabled = true;
         btnExport.innerHTML = 'エクスポート中...';
 
         try {
-            // ★ 修正：パスワード入力欄の値を取得して送信する
-            const pass = exportPassword ? exportPassword.value : "";
-            
             const result = await invoke("execute_export", { 
                 targets: targets, 
                 savePath: savePath,

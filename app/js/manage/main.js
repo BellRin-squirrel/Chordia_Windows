@@ -1,16 +1,28 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // プレイヤーの初期化
+    // ★ 追加：URLから高度な検索パラメータを受け取り、初期状態として適用する
+    const params = new URLSearchParams(window.location.search);
+    const advTitle = params.get('adv_title');
+    const advArtist = params.get('adv_artist');
+    
+    if (advTitle && advArtist) {
+        window.ManageState.advancedConditions = {
+            type: 'group',
+            match: 'all',
+            items: [
+                { type: 'filter', tag: 'title', op: 'equals', val: advTitle },
+                { type: 'filter', tag: 'artist', op: 'equals', val: advArtist }
+            ]
+        };
+    }
+
     if (window.PlayerController && typeof window.PlayerController.init === 'function') {
         window.PlayerController.init();
     }
 
-    // モーダルの初期化 (一括変更・削除・高度な検索など)
-    // ★ 修正: ManageModal から ModalController へ
     if (window.ModalController && typeof window.ModalController.init === 'function') {
         window.ModalController.init();
     }
 
-    // テーブルデータの初期読み込み
     if (window.TableController && typeof window.TableController.loadTableData === 'function') {
         window.TableController.loadTableData();
     }
@@ -40,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 検索機能のイベント登録
     const btnSearch = document.getElementById('btnSearchManage');
     const inputSearch = document.getElementById('searchInputManage');
     const btnClear = document.getElementById('btnClearSearch');
@@ -65,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 高度な検索ボタン
     const btnAdvanced = document.getElementById('btnAdvancedSearch');
     if (btnAdvanced) {
         btnAdvanced.addEventListener('click', () => {

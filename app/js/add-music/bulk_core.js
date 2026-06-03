@@ -7,7 +7,6 @@ window.BulkController = {
         const u = window.AddMusicUtils;
         const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
         
-        // タブ切り替えの設定
         document.querySelectorAll('.tab-menu .tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.tab-menu .tab-btn').forEach(b => b.classList.remove('active'));
@@ -17,11 +16,9 @@ window.BulkController = {
             });
         });
 
-        // ボタンイベント
         document.getElementById('btnFetchBulk').addEventListener('click', () => this.fetchPlaylist());
         document.getElementById('btnSubmitBulk').addEventListener('click', () => this.executeBulkImport());
 
-        // モーダルの共通閉じる処理
         const closeModals = () => {
             document.querySelectorAll('.modal-overlay').forEach(m => {
                 if (m.classList.contains('show')) {
@@ -42,14 +39,13 @@ window.BulkController = {
         setClose('btnCloseBulkArtModalX');
         setClose('btnCancelBulkDelete');
         
-        // 歌詞保存
         document.getElementById('btnSaveBulkLyric').onclick = () => {
             this.scannedData[this.currentEditIndex].lyric = document.getElementById('bulkLyricTextArea').value;
             closeModals();
             u.showToast("反映しました", false);
         };
         
-        // 自動歌詞取得 (LRCLIB)
+        // ★修正: Rustコマンド経由での歌詞取得
         document.getElementById('btnAutoBulkLyric').onclick = async () => {
             const item = this.scannedData[this.currentEditIndex];
             if(!item.title || !item.artist) { u.showToast("タイトルとアーティストが必要です", true); return; }
@@ -57,17 +53,32 @@ window.BulkController = {
             const orgText = btn.textContent;
             btn.textContent = "検索中..."; btn.disabled = true;
             try {
-                const res = await fetch(`https://lrclib.net/api/search?track_name=${encodeURIComponent(item.title)}&artist_name=${encodeURIComponent(item.artist)}`);
-                const data = await res.json();
+                const data = await invoke("search_lyrics_online", { title: item.title, artist: item.artist });
+                
+                if (data.statusCode === 404 || data.error) {
+                    u.showToast("見つかりませんでした", true);
+                    return;
+                }
+                
+                if (!Array.isArray(data) || data.length === 0) {
+                    u.showToast("見つかりませんでした", true);
+                    return;
+                }
+
                 const filtered = data.filter(d => d.plainLyrics);
                 if(filtered.length > 0) {
                     document.getElementById('bulkLyricTextArea').value = filtered[0].plainLyrics;
                     u.showToast("歌詞を取得しました", false);
-                } else { u.showToast("見つかりませんでした", true); }
-            } catch(e) { u.showToast("エラー", true); } finally { btn.textContent = orgText; btn.disabled = false; }
+                } else { 
+                    u.showToast("見つかりませんでした", true); 
+                }
+            } catch(e) { 
+                u.showToast("通信エラーが発生しました", true); 
+            } finally { 
+                btn.textContent = orgText; btn.disabled = false; 
+            }
         };
 
-        // --- 新規：一括アートワークモーダル ミニタブ切り替え ---
         const bulkArtMiniTabs = document.querySelectorAll('#bulkArtTabsMini .art-mini-tab-btn');
         bulkArtMiniTabs.forEach(btn => {
             btn.onclick = () => {
@@ -81,7 +92,6 @@ window.BulkController = {
             };
         });
 
-        // アートワークローカルファイル選択
         const artPreview = document.getElementById('currentBulkArtPreview');
         document.getElementById('newBulkArtInput').onchange = (e) => {
             const file = e.target.files[0];
@@ -95,7 +105,6 @@ window.BulkController = {
             reader.readAsDataURL(file);
         };
 
-        // 新規：動画サムネイルを取得
         document.getElementById('btnFetchBulkVideoArt').onclick = async () => {
             const url = document.getElementById('bulkMiniVideoUrl').value.trim();
             showBulkArtError("");
@@ -127,7 +136,6 @@ window.BulkController = {
             finally { btn.disabled = false; btn.textContent = orgText; }
         };
 
-        // 新規：画像URLから直接取得
         document.getElementById('btnFetchBulkDirectArt').onclick = async () => {
             const url = document.getElementById('bulkMiniImageUrl').value.trim();
             showBulkArtError("");
@@ -148,14 +156,12 @@ window.BulkController = {
             finally { btn.disabled = false; btn.textContent = orgText; }
         };
 
-        // 新規：画像を削除（初期化）
         document.getElementById('btnExecBulkRemoveArt').onclick = () => {
             artPreview.src = "REMOVE";
             document.getElementById('bulkArtStatusText').textContent = "削除予定 (反映前)";
             showBulkArtError("");
         };
 
-        // 反映保存
         document.getElementById('btnSaveBulkArt').onclick = async () => {
             const isRemove = (artPreview.src === "REMOVE" || artPreview.src.includes("REMOVE"));
             const defaultArt = await invoke("get_default_art_url");
@@ -167,7 +173,6 @@ window.BulkController = {
             u.showToast("反映しました", false);
         };
 
-        // ヘルパー：エラー表示制御
         function showBulkArtError(msg) {
             const errEl = document.getElementById('bulkArtErrorDisplay');
             if (!errEl) return;

@@ -10,7 +10,6 @@ window.LyricController = {
         
         if (btnAuto) btnAuto.addEventListener('click', () => this.searchLyrics());
 
-        // モーダル操作
         const btnCancel = document.getElementById('btnCancelLyricSearch');
         if(btnCancel) btnCancel.onclick = () => {
             modal.classList.remove('show');
@@ -36,8 +35,8 @@ window.LyricController = {
 
     searchLyrics: async function() {
         const u = window.AddMusicUtils;
+        const invoke = window.__TAURI__.core ? window.__TAURI__.core.invoke : window.__TAURI__.tauri.invoke;
         
-        // ★修正: IDを tag_title, tag_artist に変更 (main.jsの動的生成に合わせる)
         const titleEl = document.getElementById('tag_title');
         const artistEl = document.getElementById('tag_artist');
         const btn = document.getElementById('btnAutoLyric');
@@ -55,10 +54,21 @@ window.LyricController = {
         btn.disabled = true;
 
         try {
-            const url = `https://lrclib.net/api/search?track_name=${encodeURIComponent(title)}&artist_name=${encodeURIComponent(artist)}`;
-            const res = await fetch(url);
-            if (!res.ok) throw new Error("API Error");
-            const data = await res.json();
+            // ★ 修正：Rustのコマンドを経由して安全にAPIアクセスを行う
+            const data = await invoke("search_lyrics_online", { title: title, artist: artist });
+            
+            // API側で「見つからない(404)」等のエラーレスポンスが返ってきた場合
+            if (data.statusCode === 404 || data.error) {
+                u.showToast("見つかりませんでした", true);
+                return;
+            }
+
+            // 配列でないか、空っぽの場合
+            if (!Array.isArray(data) || data.length === 0) {
+                u.showToast("見つかりませんでした", true);
+                return;
+            }
+
             const validData = data.filter(item => item.plainLyrics);
             
             if (validData.length === 0) {
@@ -73,7 +83,7 @@ window.LyricController = {
             }
         } catch (e) {
             console.error(e);
-            u.showToast("検索エラー", true);
+            u.showToast("通信エラーが発生しました", true);
         } finally {
             btn.textContent = orgText;
             btn.disabled = false;

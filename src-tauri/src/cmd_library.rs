@@ -6,7 +6,6 @@ use base64::{Engine as _, engine::general_purpose};
 use tauri::State;
 use std::io::{Cursor, Read};
 
-// ★ 修正：id3 クレートから title() などを使うために必須のトレイトをインポート
 use id3::TagLike; 
 
 use crate::AppState;
@@ -210,7 +209,13 @@ pub fn check_import_duplicates(import_list: Vec<serde_json::Map<String, Value>>,
 }
 
 #[tauri::command]
-pub fn scan_zip_import(zip_data_b64: String) -> Result<serde_json::Value, String> {
+pub fn scan_zip_import(zip_data_b64: String, password: Option<String>) -> Result<serde_json::Value, String> {
+    if let Some(ref pass) = password {
+        if pass.chars().count() > 128 {
+            return Err("パスワードは128文字以内にしてください".to_string());
+        }
+    }
+
     let bytes = general_purpose::STANDARD.decode(zip_data_b64).map_err(|e| e.to_string())?;
     let cursor = Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
@@ -218,7 +223,18 @@ pub fn scan_zip_import(zip_data_b64: String) -> Result<serde_json::Value, String
     let mut data_list = Vec::new();
     
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
+        // ★ 修正: 単一 Result への対応と ZipError::InvalidPassword の的確なキャッチ
+        let mut file = match password {
+            Some(ref p) if !p.is_empty() => {
+                match archive.by_index_decrypt(i, p.as_bytes()) {
+                    Ok(f) => f,
+                    Err(zip::result::ZipError::InvalidPassword) => return Err("パスワードが間違っています".to_string()),
+                    Err(e) => return Err(e.to_string()),
+                }
+            },
+            _ => archive.by_index(i).map_err(|e| e.to_string())?
+        };
+
         if file.is_file() {
             let name = file.name().to_string();
             if name.to_lowercase().ends_with(".mp3") || name.to_lowercase().ends_with(".m4a") || name.to_lowercase().ends_with(".mp4") {
@@ -230,7 +246,6 @@ pub fn scan_zip_import(zip_data_b64: String) -> Result<serde_json::Value, String
                 let mut album = String::new();
                 let mut artwork_base64 = String::new();
                 
-                // ★修正: ここで title(), artist(), album() などが正常に機能するようになります
                 if let Ok(tag) = id3::Tag::read_from2(&mut Cursor::new(&buffer)) {
                     if let Some(t) = tag.title() { title = t.to_string(); }
                     if let Some(a) = tag.artist() { artist = a.to_string(); }
@@ -269,7 +284,13 @@ pub fn scan_zip_import(zip_data_b64: String) -> Result<serde_json::Value, String
 }
 
 #[tauri::command]
-pub fn execute_zip_import(zip_data_b64: String, import_data_list: Vec<serde_json::Map<String, Value>>, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+pub fn execute_zip_import(zip_data_b64: String, import_data_list: Vec<serde_json::Map<String, Value>>, password: Option<String>, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    if let Some(ref pass) = password {
+        if pass.chars().count() > 128 {
+            return Err("パスワードは128文字以内にしてください".to_string());
+        }
+    }
+
     let bytes = general_purpose::STANDARD.decode(zip_data_b64).map_err(|e| e.to_string())?;
     let cursor = Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
@@ -296,49 +317,59 @@ pub fn execute_zip_import(zip_data_b64: String, import_data_list: Vec<serde_json
         }
         
         if let Some(idx) = found_file {
-            if let Ok(mut file) = archive.by_index(idx) {
-                let f_id: String = rng().sample_iter(&Alphanumeric).take(32).map(char::from).collect();
-                let mut ext = "mp3".to_string();
-                if let Some(e) = std::path::Path::new(&rel_path).extension().and_then(|e| e.to_str()) { ext = e.to_string(); }
-                let m_rel = format!("library/music/{}.{}", f_id, ext);
+            // ★ 修正: 単一 Result への対応と ZipError::InvalidPassword の的確なキャッチ
+            let mut file = match password {
+                Some(ref p) if !p.is_empty() => {
+                    match archive.by_index_decrypt(idx, p.as_bytes()) {
+                        Ok(f) => f,
+                        Err(zip::result::ZipError::InvalidPassword) => return Err("パスワードが間違っています".to_string()),
+                        Err(e) => return Err(e.to_string()),
+                    }
+                },
+                _ => archive.by_index(idx).map_err(|e| e.to_string())?
+            };
+
+            let f_id: String = rng().sample_iter(&Alphanumeric).take(32).map(char::from).collect();
+            let mut ext = "mp3".to_string();
+            if let Some(e) = std::path::Path::new(&rel_path).extension().and_then(|e| e.to_str()) { ext = e.to_string(); }
+            let m_rel = format!("library/music/{}.{}", f_id, ext);
+            
+            let mut buffer = Vec::new();
+            let _ = file.read_to_end(&mut buffer);
+            
+            if fs::write(base.join(&m_rel), &buffer).is_ok() {
+                item.insert("musicFilename".to_string(), Value::String(m_rel.clone()));
+                item.insert("streamUrl".to_string(), Value::String(get_asset_url(&m_rel)));
                 
-                let mut buffer = Vec::new();
-                let _ = file.read_to_end(&mut buffer);
+                let duration_str = get_duration_str(Some(&Value::String(m_rel.clone())));
+                item.insert("duration".to_string(), Value::String(duration_str));
                 
-                if fs::write(base.join(&m_rel), &buffer).is_ok() {
-                    item.insert("musicFilename".to_string(), Value::String(m_rel.clone()));
-                    item.insert("streamUrl".to_string(), Value::String(get_asset_url(&m_rel)));
-                    
-                    let duration_str = get_duration_str(Some(&Value::String(m_rel.clone())));
-                    item.insert("duration".to_string(), Value::String(duration_str));
-                    
-                    let mut img_saved = false;
-                    if let Some(art_b64) = item.get("artworkBase64").and_then(|v| v.as_str()) {
-                        if !art_b64.is_empty() {
-                            let b64c = if art_b64.contains(',') { art_b64.split(',').nth(1).unwrap() } else { art_b64 };
-                            if let Ok(by) = general_purpose::STANDARD.decode(b64c) {
-                                let ir = format!("library/images/{}.png", f_id);
-                                if force_save_as_png(&by, &base.join(&ir)) {
-                                    item.insert("imageFilename".to_string(), Value::String(ir.clone()));
-                                    item.insert("imageData".to_string(), Value::String(get_asset_url(&ir)));
-                                    img_saved = true;
-                                }
+                let mut img_saved = false;
+                if let Some(art_b64) = item.get("artworkBase64").and_then(|v| v.as_str()) {
+                    if !art_b64.is_empty() {
+                        let b64c = if art_b64.contains(',') { art_b64.split(',').nth(1).unwrap() } else { art_b64 };
+                        if let Ok(by) = general_purpose::STANDARD.decode(b64c) {
+                            let ir = format!("library/images/{}.png", f_id);
+                            if force_save_as_png(&by, &base.join(&ir)) {
+                                item.insert("imageFilename".to_string(), Value::String(ir.clone()));
+                                item.insert("imageData".to_string(), Value::String(get_asset_url(&ir)));
+                                img_saved = true;
                             }
                         }
                     }
-                    
-                    if !img_saved {
-                        item.insert("imageFilename".to_string(), Value::String("library/images/default.png".to_string()));
-                        item.insert("imageData".to_string(), Value::String(get_asset_url("library/images/default.png")));
-                    }
-                    
-                    item.remove("artworkBase64");
-                    item.remove("relPath");
-                    item.remove("status");
-                    
-                    db.push(item);
-                    count += 1;
                 }
+                
+                if !img_saved {
+                    item.insert("imageFilename".to_string(), Value::String("library/images/default.png".to_string()));
+                    item.insert("imageData".to_string(), Value::String(get_asset_url("library/images/default.png")));
+                }
+                
+                item.remove("artworkBase64");
+                item.remove("relPath");
+                item.remove("status");
+                
+                db.push(item);
+                count += 1;
             }
         }
     }

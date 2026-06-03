@@ -1,6 +1,16 @@
 window.ManageUtils = {
+    // ★修正: ダブルクォーテーションやシングルクォーテーションも確実にエスケープする
     escapeHtml: function(text) {
-        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        if (text === null || text === undefined) return '';
+        return String(text).replace(/[&<>"']/g, function(match) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[match];
+        });
     },
     showToast: function(msg, isErr) {
         const toast = document.getElementById('toast');

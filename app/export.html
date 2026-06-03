@@ -108,7 +108,7 @@
                 </div>
             </section>
 
-            <!-- 3. セキュリティ (New!) -->
+            <!-- 3. セキュリティ -->
             <section class="export-section">
                 <h2 class="section-title">セキュリティ</h2>
                 <div class="settings-list">
@@ -118,7 +118,8 @@
                             <span class="row-desc">ZIPファイルを暗号化します（空欄の場合は暗号化なし）</span>
                         </div>
                         <div class="input-wrapper">
-                            <input type="password" id="exportPassword" class="password-input" placeholder="パスワードを入力">
+                            <!-- ★ 修正：maxlength="128" を追加 -->
+                            <input type="password" id="exportPassword" class="password-input" placeholder="パスワードを入力" maxlength="128">
                         </div>
                     </div>
                 </div>

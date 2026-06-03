@@ -6,7 +6,6 @@ use zip::write::SimpleFileOptions;
 
 #[tauri::command]
 pub fn get_default_export_path() -> Result<String, String> {
-    // デフォルトの保存先をダウンロードフォルダ、またはドキュメントに設定
     let doc_dir = dirs::download_dir().unwrap_or_else(|| dirs::document_dir().unwrap_or_else(|| PathBuf::from(".")));
     Ok(doc_dir.join("Chordia_Export.zip").to_string_lossy().to_string())
 }
@@ -31,10 +30,11 @@ pub fn ask_save_path(current_path: String) -> Option<String> {
 pub async fn execute_export(targets: serde_json::Map<String, Value>, save_path: String, password: Option<String>) -> Result<Value, String> {
     let save_path_clone = save_path.clone();
     
-    // ★ 修正：パスワード（String）を Box::leak で &'static str に安全に変換（リーク）させます。
-    // これにより、ZipWriterが保持するために要求する 'static ライフタイム制約を完全にクリアします。
-    // 数バイトのリークは、低頻度な実行であるため実用上の影響は全くありません。
+    // ★ 修正：パスワードの文字数チェック (128文字以内)
     let password_static: &'static str = if let Some(pass) = password {
+        if pass.chars().count() > 128 {
+            return Err("パスワードは128文字以内にしてください".to_string());
+        }
         if !pass.is_empty() {
             Box::leak(pass.into_boxed_str())
         } else {
@@ -66,7 +66,6 @@ pub async fn execute_export(targets: serde_json::Map<String, Value>, save_path: 
                 .unix_permissions(0o755)
         };
 
-        // 各ターゲットファイルの追加処理
         if targets.get("music").and_then(|v| v.as_bool()).unwrap_or(false) {
             add_dir_to_zip(&mut zip, options.clone(), &base_dir.join("library/music"), "library/music")?;
         }
@@ -98,7 +97,6 @@ pub async fn execute_export(targets: serde_json::Map<String, Value>, save_path: 
     }
 }
 
-// 修正：ライフタイム引数（<'_>）を廃止し、SimpleFileOptions単体としてコンパイルを通します
 fn add_file_to_zip(
     zip: &mut zip::ZipWriter<fs::File>,
     options: SimpleFileOptions,
@@ -112,7 +110,6 @@ fn add_file_to_zip(
     Ok(())
 }
 
-// 修正：ライフタイム引数（<'_>）を廃止し、SimpleFileOptions単体としてコンパイルを通します
 fn add_dir_to_zip(
     zip: &mut zip::ZipWriter<fs::File>,
     options: SimpleFileOptions,
