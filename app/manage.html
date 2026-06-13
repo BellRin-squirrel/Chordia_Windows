@@ -15,6 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
     <script src="js/theme_head.js"></script>
     <script>
+        // Tauri v2 APIを使用して、新しいウィンドウで開かれたか（ラベルが manage_window か）を安全に判定する
         document.addEventListener('DOMContentLoaded', () => {
             const isWindowMode = window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.window.getCurrentWindow().label === 'manage_window';
             if (isWindowMode || window.location.search.includes('mode=window')) {
@@ -177,7 +178,6 @@
         </div>
     </div>
 
-    <!-- ★ 修正：歌詞検索ポップアップの構造を add_music 画面と同等に揃えました -->
     <div id="lyricSearchModalManage" class="modal-overlay" style="z-index: 2500;">
         <div class="modal-content lyric-modal" style="width: 500px;">
             <div id="lyricSearchListViewManage" class="modal-view">
@@ -199,11 +199,94 @@
         </div>
     </div>
 
+    <!-- 一括変更モーダル -->
     <div id="bulkEditModal" class="modal-overlay">
-        <div class="modal-content bulk-modal" style="width: 550px;">
+        <div class="modal-content bulk-modal" style="width: 950px; max-height: 90vh; overflow-y: auto; position: relative;">
             <h3>選択した曲を一括変更</h3>
-            <div id="bulkFormContainer" class="bulk-form-container"></div>
-            <div class="modal-buttons">
+            
+            <div class="bulk-main-layout" style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 32px; text-align: left;">
+                <!-- 左カラム: メタデータタグ一括入力 -->
+                <div class="bulk-left-col">
+                    <h4 style="border-bottom: 2px solid rgba(128,128,128,0.2); padding-bottom: 6px; margin-top: 0; margin-bottom: 16px; font-weight: 700;">メタデータの一括編集</h4>
+                    <div id="bulkFormContainer" class="bulk-form-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;"></div>
+                </div>
+                
+                <!-- 右カラム: アートワーク一括選択 & 歌詞一括追加 -->
+                <div class="bulk-right-col" style="display: flex; flex-direction: column; gap: 24px;">
+                    <!-- アートワーク一括編集 -->
+                    <div class="bulk-art-section">
+                        <h4 style="border-bottom: 2px solid rgba(128,128,128,0.2); padding-bottom: 6px; margin-top: 0; margin-bottom: 12px; font-weight: 700;">カバーアートの一括編集</h4>
+                        
+                        <!-- ★ 追加：維持と上書きの選択用ラジオ -->
+                        <div class="source-selector" style="display: flex; gap: 16px; margin-bottom: 16px;">
+                            <label class="radio-label" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold; color: var(--text-main);">
+                                <input type="radio" name="bulkArtMode" value="keep" checked style="accent-color: var(--primary-color);">
+                                <span>設定を維持する（そのまま変更しない）</span>
+                            </label>
+                            <label class="radio-label" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold; color: var(--text-main);">
+                                <input type="radio" name="bulkArtMode" value="overwrite" style="accent-color: var(--primary-color);">
+                                <span>新しい画像で一括上書きする</span>
+                            </label>
+                        </div>
+                        
+                        <div class="art-tabs-mini" id="bulkEditArtTabsMini">
+                            <button class="art-mini-tab-btn active" data-target="bulk-edit-art-mini-local">ローカル</button>
+                            <button class="art-mini-tab-btn" data-target="bulk-edit-art-mini-video">動画URL</button>
+                            <button class="art-mini-tab-btn" data-target="bulk-edit-art-mini-image">画像URL</button>
+                        </div>
+
+                        <div id="bulk-edit-art-mini-local" class="art-mini-tab-content active">
+                            <button class="btn-select-art" style="width: 100%; margin-bottom: 8px;" onclick="document.getElementById('newBulkEditArtInput').click()">PCから画像を選択</button>
+                        </div>
+
+                        <div id="bulk-edit-art-mini-video" class="art-mini-tab-content">
+                            <div class="form-row" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <input type="text" id="bulkEditMiniVideoUrl" class="bulk-input" placeholder="動画URLを入力..." style="flex: 1;">
+                                <button id="btnFetchBulkEditVideoArt" class="btn-primary" style="padding: 6px 14px; font-size: 0.85rem; white-space: nowrap;">取得</button>
+                            </div>
+                        </div>
+
+                        <div id="bulk-edit-art-mini-image" class="art-mini-tab-content">
+                            <div class="form-row" style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <input type="text" id="bulkEditMiniImageUrl" class="bulk-input" placeholder="画像の直接URLを入力..." style="flex: 1;">
+                                <button id="btnFetchBulkEditDirectArt" class="btn-primary" style="padding: 6px 14px; font-size: 0.85rem; white-space: nowrap;">取得</button>
+                            </div>
+                        </div>
+
+                        <p id="bulkEditArtErrorDisplay" class="art-error-msg" style="display: none;"></p>
+
+                        <div class="art-preview-area" style="display: flex; align-items: center; gap: 16px; padding: 12px; border-radius: 12px; background: var(--bg-color); border: 1px solid rgba(128,128,128,0.1);">
+                            <img id="currentBulkEditArtPreview" src="icon/Chordia.png" alt="Preview" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;">
+                            <div>
+                                <p id="bulkEditArtStatusText" style="font-size: 0.85rem; font-weight: 700; margin: 0 0 8px 0; color: var(--text-sub);">現在の画像</p>
+                                <button class="btn-delete-art" id="btnExecBulkEditRemoveArt" style="padding: 4px 10px; font-size: 0.8rem;">画像を削除</button>
+                            </div>
+                        </div>
+                        <input type="file" id="newBulkEditArtInput" accept="image/*" hidden>
+                    </div>
+
+                    <!-- 歌詞一括編集 -->
+                    <div class="bulk-lyric-section">
+                        <h4 style="border-bottom: 2px solid rgba(128,128,128,0.2); padding-bottom: 6px; margin-top: 0; margin-bottom: 12px; font-weight: 700;">歌詞の一括編集</h4>
+                        
+                        <!-- ★ 追加：維持と上書きの選択用ラジオ (歌詞) -->
+                        <div class="source-selector" style="display: flex; gap: 16px; margin-bottom: 12px;">
+                            <label class="radio-label" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold; color: var(--text-main);">
+                                <input type="radio" name="bulkLyricMode" value="keep" checked style="accent-color: var(--primary-color);">
+                                <span>設定を維持する（そのまま変更しない）</span>
+                            </label>
+                            <label class="radio-label" style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.9rem; font-weight: bold; color: var(--text-main);">
+                                <input type="radio" name="bulkLyricMode" value="overwrite" style="accent-color: var(--primary-color);">
+                                <span>新しい歌詞で一括上書きする</span>
+                            </label>
+                        </div>
+                        
+                        <textarea id="bulkEditLyricTextArea" placeholder="歌詞を入力..." style="width: 100%; height: 120px; background: var(--bg-color); color: var(--text-main); border: 1px solid rgba(128,128,128,0.2); border-radius: 8px; padding: 8px; font-size: 0.9rem; resize: vertical; outline: none; box-sizing: border-box;"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-buttons" style="margin-top: 24px; border-top: 1px solid rgba(128,128,128,0.2); padding-top: 16px;">
                 <button id="btnCancelBulkEdit" class="btn-cancel">キャンセル</button>
                 <button id="btnExecBulkEdit" class="btn-save">変更を適用</button>
             </div>
@@ -213,7 +296,7 @@
     <div id="deleteModal" class="modal-overlay">
         <div class="modal-content" style="width: 400px; text-align: center;">
             <h3 style="color: #ef4444;">楽曲を削除</h3>
-            <p style="color: var(--text-sub); margin-bottom: 12px;">以下の楽曲をライブラリとファイルから完全に削除しますか？</p>
+            <p style="color: var(--text-sub); margin-bottom: 12px;">以下の楽曲をライブラリとファイルから完全に削除しますか?</p>
             <p id="deleteTargetName" style="font-weight: 800; font-size: 1.1rem; margin-bottom: 24px;"></p>
             <div class="modal-buttons">
                 <button id="btnCancelDelete" class="btn-cancel">キャンセル</button>
@@ -252,6 +335,9 @@
     <script src="js/manage/globals.js"></script>
     <script src="js/manage/utils.js"></script>
     <script src="js/manage/player.js"></script>
+    <!-- ★ 変更: 分割したファイルをmodal.jsの前に配置 -->
+    <script src="js/manage/modal_advanced.js"></script>
+    <script src="js/manage/modal_bulk.js"></script>
     <script src="js/manage/modal.js"></script>
     <script src="js/manage/table.js"></script>
     <script src="js/manage/main.js"></script>

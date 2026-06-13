@@ -18,6 +18,8 @@ use tokio::sync::Mutex;
 use tauri::{Manager, Emitter};
 use utils::{load_db, load_playlists_master};
 
+const APP_VERSION: &str = "v3.0.0";
+
 pub struct AppState {
     pub db: std::sync::Mutex<Vec<serde_json::Map<String, serde_json::Value>>>,
     pub playlists: std::sync::Mutex<Vec<serde_json::Value>>,
@@ -27,6 +29,11 @@ pub struct AppState {
 fn resolve_path(rel_path: String) -> Result<String, String> {
     let abs_path = crate::utils::get_base_dir().join(&rel_path);
     Ok(abs_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn get_app_version() -> &'static str{
+    APP_VERSION
 }
 
 fn main() {
@@ -71,7 +78,7 @@ fn main() {
             cmd_playlist::get_playlist_summaries, cmd_playlist::get_playlist_details, cmd_playlist::get_album_list, cmd_playlist::get_artist_list, cmd_playlist::get_virtual_playlist_details, cmd_playlist::create_playlist, cmd_playlist::update_playlist_by_id, cmd_playlist::delete_playlist_by_id, cmd_playlist::duplicate_playlist_by_id, cmd_playlist::add_songs_to_playlist, cmd_playlist::remove_songs_from_playlist, cmd_playlist::create_smart_playlist, cmd_playlist::update_smart_playlist, cmd_playlist::convert_smart_to_normal_and_remove_songs,
             cmd_library::get_library_count, cmd_library::get_library_chunk, cmd_library::update_song_by_id, cmd_library::update_song_artwork_by_id, cmd_library::delete_song_by_id, cmd_library::get_common_values_for_selected, cmd_library::update_multiple_songs, cmd_library::delete_multiple_songs, cmd_library::parse_list_import, cmd_library::execute_final_list_import, cmd_library::check_import_duplicates, cmd_library::scan_zip_import, cmd_library::execute_zip_import,
             cmd_history::record_playback, cmd_history::get_playback_history,
-            cmd_export::get_default_export_path, cmd_export::ask_save_path, cmd_export::execute_export,
+            cmd_export::get_default_export_path, cmd_export::ask_save_path, cmd_export::execute_export, get_app_version,
             // ★ 追加：拡張機能（ダウンロード）用コマンド
             cmd_extensions::check_tool_updates, cmd_extensions::install_tool,
             cmd_api::start_sync_server, cmd_api::stop_sync_server, cmd_api::respond_to_request, cmd_api::get_active_sessions, cmd_api::force_disconnect_session,

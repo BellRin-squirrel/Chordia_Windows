@@ -92,6 +92,25 @@ pub fn get_common_values_for_selected(filenames: Vec<String>, state: State<'_, A
         let first = sel[0].get(k).and_then(|v| v.as_str()).unwrap_or("");
         res.insert(k.into(), if sel.iter().all(|i| i.get(k).and_then(|v| v.as_str()).unwrap_or("") == first) { first.into() } else { "< 維持 >".into() });
     }
+
+    // 複数選択時のカバーアート（画像ファイル名）の共通判定を追加
+    let first_img = sel[0].get("imageFilename").and_then(|v| v.as_str()).unwrap_or("");
+    let common_img = if sel.iter().all(|i| i.get("imageFilename").and_then(|v| v.as_str()).unwrap_or("") == first_img) {
+        first_img
+    } else {
+        "< 維持 >"
+    };
+    res.insert("imageFilename".into(), common_img.into());
+
+    // ★追加: 共通画像のアセットURL（imageData）についても、データベース上のチェックとJSへの送信を同期
+    let first_data = sel[0].get("imageData").and_then(|v| v.as_str()).unwrap_or("");
+    let common_data = if sel.iter().all(|i| i.get("imageData").and_then(|v| v.as_str()).unwrap_or("") == first_data) {
+        first_data
+    } else {
+        "< 維持 >"
+    };
+    res.insert("imageData".into(), common_data.into());
+    
     res
 }
 
@@ -99,10 +118,55 @@ pub fn get_common_values_for_selected(filenames: Vec<String>, state: State<'_, A
 pub fn update_multiple_songs(filenames: Vec<String>, updates: serde_json::Map<String, Value>, state: State<'_, AppState>) -> Value {
     let mut db = state.db.lock().unwrap();
     let mut count = 0;
-    let up: Vec<_> = updates.into_iter().filter(|(_, v)| v.as_str() != Some("< 維持 >")).collect();
+    
+    // updatesから一括指定用のアートワークBase64データ(artworkBase64)を分離・確認
+    let mut artwork_b64 = None;
+    let mut up_map = updates.clone();
+    if let Some(art) = up_map.remove("artworkBase64") {
+        if art.as_str() != Some("< 維持 >") {
+            artwork_b64 = art.as_str().map(|s| s.to_string());
+        }
+    }
+    
+    let up: Vec<_> = up_map.into_iter().filter(|(_, v)| v.as_str() != Some("< 維持 >")).collect();
+    let base = get_base_dir();
+    
     for i in db.iter_mut() {
-        if filenames.contains(&i.get("musicFilename").and_then(|v| v.as_str()).unwrap_or("").split(&['/', '\\'][..]).last().unwrap_or("").into()) {
-            for (k, v) in &up { i.insert(k.clone(), v.clone()); }
+        let file_name_only = i.get("musicFilename").and_then(|v| v.as_str()).unwrap_or("").split(&['/', '\\'][..]).last().unwrap_or("");
+        if filenames.contains(&file_name_only.to_string()) {
+            // メタデータおよび歌詞の同期一括更新
+            for (k, v) in &up {
+                if k == "lyric" {
+                    let clean_val = v.as_str().unwrap_or("").replace("\r\n", "\n").replace("\r", "\n");
+                    i.insert(k.clone(), Value::String(clean_val));
+                } else {
+                    i.insert(k.clone(), v.clone());
+                }
+            }
+            
+            // アートワークの一括保存処理（各楽曲ごとにユニークなPNGファイルを配置）
+            if let Some(ref b64) = artwork_b64 {
+                if let Some(old) = i.get("imageFilename").and_then(|v| v.as_str()) {
+                    if !old.contains("default.png") {
+                        let _ = fs::remove_file(base.join(old));
+                    }
+                }
+                
+                if b64 == "REMOVE" {
+                    i.insert("imageFilename".into(), "library/images/default.png".into());
+                    i.insert("imageData".into(), get_asset_url("library/images/default.png").into());
+                } else {
+                    let f_id: String = rng().sample_iter(&Alphanumeric).take(32).map(char::from).collect();
+                    let path = format!("library/images/{}.png", f_id);
+                    let b64c = if b64.contains(',') { b64.split(',').nth(1).unwrap() } else { b64 };
+                    if let Ok(bytes) = general_purpose::STANDARD.decode(b64c) {
+                        if force_save_as_png(&bytes, &base.join(&path)) { 
+                            i.insert("imageFilename".into(), path.clone().into());
+                            i.insert("imageData".into(), get_asset_url(&path).into());
+                        }
+                    }
+                }
+            }
             count += 1;
         }
     }
@@ -162,6 +226,10 @@ pub fn execute_final_list_import(import_data_list: Vec<serde_json::Map<String, V
     let mut db = state.db.lock().unwrap();
     let mut count = 0;
     
+    let base = get_base_dir();
+    let _ = fs::create_dir_all(base.join("library/music"));
+    let _ = fs::create_dir_all(base.join("library/images"));
+
     for mut item in import_data_list {
         item.remove("status"); 
         
@@ -172,17 +240,34 @@ pub fn execute_final_list_import(import_data_list: Vec<serde_json::Map<String, V
             item.insert("streamUrl".to_string(), Value::String(get_asset_url(&rel_music_path)));
         }
         
-        let rel_img_path = item.get("imageFilename").and_then(|v| v.as_str()).unwrap_or("library/images/default.png").to_string();
-        item.insert("imageData".to_string(), Value::String(get_asset_url(&rel_img_path)));
+        // アートワーク処理
+        let mut img_saved = false;
+        if let Some(art_b64) = item.get("artworkBase64").and_then(|v| v.as_str()) {
+            if !art_b64.is_empty() {
+                let b64c = if art_b64.contains(',') { art_b64.split(',').nth(1).unwrap() } else { art_b64 };
+                if let Ok(bytes) = general_purpose::STANDARD.decode(b64c) {
+                    let f_id: String = rng().sample_iter(&Alphanumeric).take(32).map(char::from).collect();
+                    let ir = format!("library/images/{}.png", f_id);
+                    if force_save_as_png(&bytes, &base.join(&ir)) {
+                        item.insert("imageFilename".to_string(), Value::String(ir.clone()));
+                        item.insert("imageData".to_string(), Value::String(get_asset_url(&ir)));
+                        img_saved = true;
+                    }
+                }
+            }
+        }
+        
+        if !img_saved {
+            let rel_img_path = item.get("imageFilename").and_then(|v| v.as_str()).unwrap_or("library/images/default.png").to_string();
+            item.insert("imageData".to_string(), Value::String(get_asset_url(&rel_img_path)));
+        }
+        item.remove("artworkBase64");
         
         db.push(item);
         count += 1;
     }
     
-    if count > 0 {
-        let _ = save_db(&db);
-    }
-    
+    if count > 0 { let _ = save_db(&db); }
     Ok(serde_json::json!({"status": "success", "count": count}))
 }
 
@@ -220,12 +305,41 @@ pub fn scan_zip_import(zip_data_b64: String, password: Option<String>) -> Result
     let cursor = Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
     
+    // 実際に暗号化されたファイルが存在するかどうかを事前に検証する
+    let mut needs_password = false;
+    for i in 0..archive.len() {
+        match archive.by_index(i) {
+            Ok(file) => {
+                if file.is_file() && file.encrypted() {
+                    needs_password = true;
+                    break;
+                }
+            }
+            Err(zip::result::ZipError::UnsupportedArchive(msg)) => {
+                if msg.contains("Password required") {
+                    needs_password = true;
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if needs_password {
+        if password.is_none() || password.as_deref().unwrap_or("").is_empty() {
+            return Ok(serde_json::json!({"status": "password_required"}));
+        }
+        let pass = password.as_deref().unwrap_or("");
+        if pass.chars().count() > 128 {
+            return Err("パスワードは128文字以内にしてください".to_string());
+        }
+    }
+
     let mut data_list = Vec::new();
     
     for i in 0..archive.len() {
-        // ★ 修正: 単一 Result への対応と ZipError::InvalidPassword の的確なキャッチ
         let mut file = match password {
-            Some(ref p) if !p.is_empty() => {
+            Some(ref p) if !p.is_empty() && needs_password => {
                 match archive.by_index_decrypt(i, p.as_bytes()) {
                     Ok(f) => f,
                     Err(zip::result::ZipError::InvalidPassword) => return Err("パスワードが間違っています".to_string()),
@@ -285,12 +399,6 @@ pub fn scan_zip_import(zip_data_b64: String, password: Option<String>) -> Result
 
 #[tauri::command]
 pub fn execute_zip_import(zip_data_b64: String, import_data_list: Vec<serde_json::Map<String, Value>>, password: Option<String>, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
-    if let Some(ref pass) = password {
-        if pass.chars().count() > 128 {
-            return Err("パスワードは128文字以内にしてください".to_string());
-        }
-    }
-
     let bytes = general_purpose::STANDARD.decode(zip_data_b64).map_err(|e| e.to_string())?;
     let cursor = Cursor::new(bytes);
     let mut archive = zip::ZipArchive::new(cursor).map_err(|e| e.to_string())?;
@@ -308,7 +416,11 @@ pub fn execute_zip_import(zip_data_b64: String, import_data_list: Vec<serde_json
         
         let mut found_file = None;
         for i in 0..archive.len() {
-            if let Ok(file) = archive.by_index(i) {
+            let file_res = match password {
+                Some(ref p) if !p.is_empty() => archive.by_index_decrypt(i, p.as_bytes()),
+                _ => archive.by_index(i)
+            };
+            if let Ok(file) = file_res {
                 if file.name() == rel_path {
                     found_file = Some(i);
                     break;
@@ -317,7 +429,6 @@ pub fn execute_zip_import(zip_data_b64: String, import_data_list: Vec<serde_json
         }
         
         if let Some(idx) = found_file {
-            // ★ 修正: 単一 Result への対応と ZipError::InvalidPassword の的確なキャッチ
             let mut file = match password {
                 Some(ref p) if !p.is_empty() => {
                     match archive.by_index_decrypt(idx, p.as_bytes()) {

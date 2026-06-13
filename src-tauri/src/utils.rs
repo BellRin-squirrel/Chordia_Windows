@@ -32,7 +32,7 @@ pub fn get_asset_url(rel_path: &str) -> String {
     format!("http://asset.localhost/{}", encoded)
 }
 
-pub fn get_image_base64(rel_path: &str) -> String {
+/*pub fn get_image_base64(rel_path: &str) -> String {
     if rel_path.is_empty() { return "".to_string(); }
     let path = get_base_dir().join(rel_path);
     if !path.exists() { return "".to_string(); }
@@ -41,7 +41,7 @@ pub fn get_image_base64(rel_path: &str) -> String {
         return format!("data:image/png;base64,{}", general_purpose::STANDARD.encode(&bytes));
     }
     "".to_string()
-}
+}*/
 
 pub fn load_db() -> Vec<serde_json::Map<String, Value>> {
     let base = get_base_dir();

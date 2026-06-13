@@ -185,7 +185,6 @@ body.import-body-layout {
     background: rgba(128, 128, 128, 0.1);
 }
 
-/* ★追加: プライマリボタンのスタイル */
 .btn-primary {
     background: var(--primary-color);
     color: white;
@@ -201,7 +200,7 @@ body.import-body-layout {
     background: var(--primary-color-dark);
 }
 
-/* --- ZIPインポート結果テーブル --- */
+/* --- インポート結果テーブル --- */
 .result-header {
     display: flex;
     justify-content: space-between;
@@ -257,8 +256,24 @@ body.import-body-layout {
 .mp3-table .col-art-thumb { width: 60px; text-align: center; }
 .mp3-table .col-art-thumb img { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(128,128,128,0.2); }
 
+/* ★ 修正：一括追加（Bulk）と共通化し、表の中の入力欄を綺麗に装飾 */
 .mp3-table td input[type="text"] {
-    min-width: 250px; 
+    min-width: 180px; 
+    padding: 8px 12px;
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    border-radius: 6px;
+    background: var(--bg-color);
+    color: var(--text-main);
+    outline: none;
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    height: 38px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mp3-table td input[type="text"]:focus {
+    border-color: var(--primary-color);
+    background: var(--card-bg);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
 .mp3-table .col-action {
@@ -284,7 +299,7 @@ body.import-body-layout {
 }
 .edit-input:focus { border-color: var(--primary-color); background: var(--card-bg); }
 
-/* --- アートワークミニタブ --- */
+/* --- アートワークミニタブ (インポート画面風) --- */
 .art-tabs-mini {
     display: flex;
     gap: 6px;
@@ -319,6 +334,132 @@ body.import-body-layout {
 
 .art-mini-tab-content.active {
     display: block;
+}
+
+/* --- アルバムアート編集モーダル用のスタイル --- */
+.art-preview-area {
+    background: var(--bg-color);
+    padding: 20px;
+    border-radius: 16px;
+    margin-bottom: 20px;
+    text-align: center;
+    border: 1px solid rgba(128, 128, 128, 0.1);
+}
+.art-preview-area img {
+    width: 240px;
+    height: 240px;
+    object-fit: cover;
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 12px;
+}
+#importArtStatusText, #artStatusText { font-size: 0.85rem; color: var(--text-sub); font-weight: 700; }
+
+.art-error-msg {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-top: 10px;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    text-align: left;
+}
+
+.btn-select-art {
+    width: 100%;
+    background: var(--bg-color);
+    border: 1px solid rgba(128, 128, 128, 0.2);
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--text-main);
+    transition: all 0.2s;
+}
+.btn-select-art:hover { background: rgba(128, 128, 128, 0.1); }
+
+.btn-delete-art {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-delete-art:hover { background: #ef4444; color: white; }
+
+/* --- ボタン装飾 --- */
+.modal-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+
+.btn-save {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    border: none !important;
+    padding: 12px 28px !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    transition: filter 0.2s, transform 0.1s !important;
+}
+.btn-save:hover { filter: brightness(1.1) !important; transform: translateY(-1px) !important; }
+.btn-save:active { transform: translateY(0) !important; }
+
+.btn-cancel {
+    background: rgba(128, 128, 128, 0.1) !important;
+    color: var(--text-main) !important;
+    border: none !important;
+    padding: 12px 24px !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+}
+.btn-cancel:hover { background: rgba(128, 128, 128, 0.2) !important; }
+
+/* ★ 修正：バツボタン（btnCloseBulkArtModalX 等）のサイズ固定および右上絶対配置 */
+.btn-close-circle {
+    position: absolute !important; 
+    top: 20px !important; 
+    right: 20px !important;
+    width: 32px !important; 
+    height: 32px !important;
+    border-radius: 50% !important;
+    background-color: rgba(128, 128, 128, 0.1) !important; 
+    border: none !important;
+    color: var(--text-sub) !important; 
+    cursor: pointer !important; 
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s ease !important;
+    box-sizing: border-box !important;
+    z-index: 100 !important;
+}
+
+.btn-close-circle:hover {
+    background-color: #ef4444 !important;
+    color: white !important;
+    transform: rotate(90deg) !important;
+}
+
+.btn-close-circle svg {
+    width: 16px !important;
+    height: 16px !important;
+    pointer-events: none !important;
+}
+
+/* ★ 修正：モーダルコンテンツの基準点（バツボタンをポップアップ内に固定する） */
+.modal-content {
+    position: relative !important;
 }
 
 /* --- ボタン・進捗 --- */
