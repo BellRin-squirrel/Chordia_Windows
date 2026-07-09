@@ -1,3 +1,6 @@
+# 注意
+このリポジトリはアーカイブされました。新しいリポジトリは[こちら](https://github.com/BellRin-squirrel/Chordia)です。
+
 # Chordia_Windows_Portable
 ここに記載されている説明はv3.1.0についてです。もし、このバージョンがWindows_Portableの最新版でない場合は、READMEの変更があるまでお待ちください。
 
